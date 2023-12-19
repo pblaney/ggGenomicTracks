@@ -1,0 +1,14 @@
+Package: ggGenomicTracks
+Title: Build genomic track visualizations within the ggplot2 framework
+Version: 0.0.0.9000
+Authors@R: 
+    person("Patrick", "Blaney", , "patrick.blaney@nyulangone.or", role = c("aut", "cre"),
+           comment = c(ORCID = "0000-0002-9319-8866"))
+Description: The 'ggplot2' universe of visualization in R provides extensive customization
+    of plots and their components. 'ggGenomicTracks' bridges the gap between the 'ggplot2'
+    extensions to create genomic track or browser-like stacked plots at loci of interest.
+License: `use_mit_license()`, `use_gpl3_license()` or friends to pick a
+    license
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.2.3
