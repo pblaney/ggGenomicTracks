@@ -21,10 +21,7 @@
 #' @keywords coord
 coord_locus <- function(window_of_interest, flank = 0, expand = TRUE, clip = "on") {
   # Parse the window plus flank on both ends
-  locus_gr <- gUtils::parse.gr(window_of_interest) + flank
-  locus <- list("chrom" = as.character(GenomeInfoDb::seqnames(locus_gr)),
-                "start" = GenomicRanges::start(locus_gr),
-                "end" = GenomicRanges::end(locus_gr))
+  locus <- parse_locus(window_of_interest = window_of_interest, flank = flank)
 
   # Build a cartesian coord fixed to the window and extend it with locus subsetting
   base_coord <- ggplot2::coord_cartesian(xlim = c(locus$start, locus$end), expand = expand, clip = clip)
@@ -47,6 +44,22 @@ coord_locus <- function(window_of_interest, flank = 0, expand = TRUE, clip = "on
 
   list(locus_coord,
        ggplot2::scale_x_continuous(name = axis_name, labels = axis_labels, expand = c(0.01, 0.01)))
+}
+
+#' @name parse_locus
+#' @title Parse a genomic window string
+#'
+#' @description
+#' Parses a window string and extends it by the flank on both ends. For internal use only.
+#'
+#' @inheritParams coord_locus
+#' @returns List with `chrom`, `start`, and `end` of the locus
+#' @keywords internal
+parse_locus <- function(window_of_interest, flank = 0) {
+  locus_gr <- gUtils::parse.gr(window_of_interest) + flank
+  list("chrom" = as.character(GenomeInfoDb::seqnames(locus_gr)),
+       "start" = GenomicRanges::start(locus_gr),
+       "end" = GenomicRanges::end(locus_gr))
 }
 
 #' @name subset_to_locus

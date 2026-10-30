@@ -13,7 +13,6 @@ Roxygen: list(markdown = TRUE)
 Depends:
     R (>= 4.1.0)
 Imports:
-    BiocGenerics,
     BSgenome.Hsapiens.UCSC.hg38,
     cli,
     data.table,
@@ -22,13 +21,11 @@ Imports:
     GenomeInfoDb,
     GenomicRanges,
     ggarchery,
-    ggbio,
     gggenes,
     ggplot2,
     ggpointdensity,
     grid,
     gUtils,
-    humanize,
     paletteer,
     purrr,
     randomcoloR,
