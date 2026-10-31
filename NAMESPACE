@@ -3,6 +3,8 @@
 S3method(grid::makeContent,gene_label_grob)
 export(GeomGeneLabel)
 export(GeomLocusScale)
+export(GeomRidgeTrack)
+export(StatRidgeTrack)
 export(annotate_ideogram_window)
 export(annotate_ideogram_zoom)
 export(annotation_locus_scale)
