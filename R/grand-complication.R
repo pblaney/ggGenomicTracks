@@ -264,258 +264,15 @@ get_locus_axis <- function(input_window, input_flank) {
 # GEOMS
 ##########
 
-#' @name geom_gene_track
-#' @title Gene structure track
+#' @name legacy_track_params
+#' @title Shared parameters of tracks not yet converted to layers
 #'
-#' @description
-#' Draws exons, UTRs, and strand-oriented intron arrows for genes of interest within
-#' the window, with gene name labels placed at the 5' or 3' end.
-#'
-#' @param data Not yet implemented; gene structures are taken from `devgru::gene_body_hg38`.
-#' @param gtf_file Not yet implemented; reserved for reading gene structures from a GTF.
-#' @param genes_of_interest Character vector of gene names to draw.
 #' @param window_of_interest Genomic window as a string, e.g. `"chr3:187734001-187751500"`.
 #' @param flank Number of bp to extend both ends of the window, default: 0
-#' @param exon_fill_color Exon fill color, or `"random"` for a distinct color per gene.
-#' @param gene_name_side Side to place gene labels, `"five_prime"` or `"three_prime"`.
-#'   Either a single value or one per gene in `genes_of_interest`.
-#' @param gene_label_nudge Horizontal offset of gene labels in bp.
-#' @param gene_label_size Gene label text size.
 #' @param x_axis_theme Style of the x-axis, one of `"full"`, `"ticks"`, or `"blank"`.
 #'   Use `"full"` on the bottom track of a stack and `"ticks"`/`"blank"` above it.
-#'
-#' @returns ggplot object
-#' @export
-#' @keywords track
-geom_gene_track <- function(data = NULL, gtf_file = NULL, genes_of_interest,
-                            window_of_interest = NULL, flank = 0, exon_fill_color = "darkred",
-                            gene_name_side = "five_prime", gene_label_nudge = 100,
-                            gene_label_size = 4, x_axis_theme = "full") {
-
-  # TODO: this requies loading from scratch each time, too slow
-  #       for now, let user load GTF as GRanges obj anyway
-  #if(!is.null(data)) {
-  #  # Quickset the data like a regular ggplot geom
-  #  genes_gtf <- data
-  #} else if(is.null(data) & !is.null(gtf_file)) {
-  #  # Read in the GTF data
-  #  genes_gtf <- devgru::read_gtf_file(gtf_file_path = gtf_file)
-  #}
-
-  # TODO: add sanity check of genes of interest
-
-  # First subset to gene transcript structure records for query and then subset
-  # to window of interest plus flank on both ends of genomic interval of WoI
-  goi_query <- devgru::gene_body_hg38 %Q% (gene_name %in% c(genes_of_interest)) %&% (gUtils::parse.gr(window_of_interest) + flank)
-
-  # Restrict the beginning and end of the GoI window if the genes extend out of the window
-  # If GoI start is less than the WoI start (i.e. out-of-bounds), rrestrict start
-  if(sum(GenomicRanges::start(goi_query) < GenomicRanges::start(gUtils::parse.gr(window_of_interest) + flank)) > 0) {
-    goi_query <- GenomicRanges::restrict(x = goi_query, start = GenomicRanges::start(gUtils::parse.gr(window_of_interest) + flank))
-  }
-  # If GoI end is greater than the WoI end (i.e. out-of-bounds), restrict end
-  if(sum(GenomicRanges::end(goi_query) > GenomicRanges::end(gUtils::parse.gr(window_of_interest) + flank)) > 0) {
-    goi_query <- GenomicRanges::restrict(x = goi_query, end = GenomicRanges::end(gUtils::parse.gr(window_of_interest) + flank))
-  }
-
-  # Convert GoI query GR to DT
-  goi_query_dt <- gUtils::gr2dt(goi_query)
-
-  # Recode GoI strand orientation for gggenes
-  goi_query_dt$orientation <- dplyr::case_when(goi_query_dt$strand == "+" ~ 1,
-                                               goi_query_dt$strand == "-" ~ 0)
-
-  # Set the aesthetic of strand orientation arrows
-  intron_arrows <- grid::arrow(type = "open",
-                               angle = 45,
-                               length = unit(x = 3.0, units = "mm"))
-
-  # Dynamic set of color for gene, default same color, can provide user set and
-  # also a random set equal to number of genes
-  if(exon_fill_color == "random") {
-    exon_fill_color <- randomcoloR::distinctColorPalette(k = length(genes_of_interest))
-  }
-
-  # Build gene track plot
-  # Starting with gene base - exons and UTRs
-  gene_base <- ggplot2::ggplot() +
-      gggenes::geom_gene_arrow(data = goi_query_dt %>% dplyr::filter(segment == "exon"),
-                               ggplot2::aes(xmin = start, xmax = end, y = gene_name, fill = gene_name, forward = orientation),
-                               fill = exon_fill_color,
-                               color = exon_fill_color,
-                               arrowhead_height = unit(9, "mm"),
-                               arrowhead_width = unit(7, "mm"),
-                               arrow_body_height = unit(7, "mm")) +
-      ggplot2::geom_segment(data = goi_query_dt %>% dplyr::filter(segment %in% c("three_prime_utr","five_prime_utr")),
-                            ggplot2::aes(x = start, xend = end, y = gene_name , yend = gene_name),
-                            linewidth = 5)
-
-  # Introns
-  # To handle multiple genes with different strand orientation, add each
-  # orientation type in separate layers
-  # Start by pulling down the intron segments
-  intron_coords <- goi_query_dt %>% dplyr::filter(segment == "intron")
-
-  # First check if there are single or mixed orientations
-  # If single, only need to add one intron arrow layer
-  if(length(unique(goi_query_dt$orientation)) == 1) {
-    # Check for positive strand orientation (rightward facing)
-    if(unique(goi_query_dt$orientation) == 1) {
-      full_gene <- gene_base +
-        ggarchery::geom_arrowsegment(data = intron_coords,
-                            ggplot2::aes(x = start, xend = end, y = gene_name, yend = gene_name),
-                            linewidth = 0.7,
-                            arrow_positions = 0.5,
-                            arrows = intron_arrows)
-
-    # Check for negative strand orientation (leftward facing)
-    } else if(unique(goi_query_dt$orientation) == 0) {
-      full_gene <- gene_base +
-        ggarchery::geom_arrowsegment(data = intron_coords,
-                            ggplot2::aes(x = end, xend = start, y = gene_name, yend = gene_name),
-                            linewidth = 0.7,
-                            arrow_positions = 0.5,
-                            arrows = intron_arrows)
-    }
-
-  # If mixed orientation, need to add two separate intron arrow layers
-  } else if (length(unique(goi_query_dt$orientation)) == 2) {
-    # Add positive strand orientation (rightward facing)
-    forward_gene <- gene_base +
-        ggarchery::geom_arrowsegment(data = intron_coords %>% dplyr::filter(orientation == 1),
-                                     ggplot2::aes(x = start, xend = end, y = gene_name, yend = gene_name),
-                                     linewidth = 0.7,
-                                     arrow_positions = 0.5,
-                                     arrows = intron_arrows)
-    # Then add the negative strand orientation (leftward facing)
-    full_gene <- forward_gene +
-        ggarchery::geom_arrowsegment(data = intron_coords %>% dplyr::filter(orientation == 0),
-                                     ggplot2::aes(x = end, xend = start, y = gene_name, yend = gene_name),
-                                     linewidth = 0.7,
-                                     arrow_positions = 0.5,
-                                     arrows = intron_arrows)
-
-  }
-
-  # Annotate with gene names
-  # 5 prime vs 3 prime end
-  # To handle multiple genes with both a default location for the gene name
-  # and for user-defined location, link each gene of interest within the WoI
-  # with the gene name side and orientation
-
-  # First, check if there is a single side to use or if user provided set of
-  # different sides to place gene names
-  # TODO: need to add sanity check that if more than 1 side provided, must match length of GoI
-  if(length(gene_name_side) == 1 | length(gene_name_side) == length(genes_of_interest)) {
-    # Start with creating simple DT of label and y-axis discrete location (same as gene name)
-    gene_name_text <- data.table("label" = genes_of_interest,
-                                 "y_axis" = genes_of_interest,
-                                 "side_of_anno" = paste0(gene_name_side,"_utr")) %>%
-                        dplyr::left_join(y = goi_query_dt %>%
-                                              dplyr::rename("label" = gene_name, "side_of_anno" = segment),
-                                         by = c("label","side_of_anno")) %>%
-                        dplyr::select(label,start,end,y_axis,side_of_anno,orientation)
-    annotated_gene <- full_gene
-
-    # Add each layer depending on gene name side + orientation type combination
-    # Five prime side for positive strand orientation (rightward facing)
-    if("five_prime_utr" %in% gene_name_text$side_of_anno & 1 %in% gene_name_text$orientation) {
-      annotated_gene <- annotated_gene +
-         geom_text(data = gene_name_text %>%
-                            dplyr::filter(side_of_anno == "five_prime_utr" & orientation == 1),
-                   aes(x = start,
-                       y = y_axis,
-                       label = label),
-                   fontface = "italic",
-                   size = gene_label_size,
-                   nudge_x = -gene_label_nudge)
-    }
-
-    # Five prime side for negative strand orientation (leftward facing)
-    if("five_prime_utr" %in% gene_name_text$side_of_anno & 0 %in% gene_name_text$orientation) {
-      annotated_gene <- annotated_gene +
-         geom_text(data = gene_name_text %>%
-                            dplyr::filter(side_of_anno == "five_prime_utr" & orientation == 0),
-                   aes(x = end,
-                       y = y_axis,
-                       label = label),
-                   fontface = "italic",
-                   size = gene_label_size,
-                   nudge_x = gene_label_nudge)
-    }
-
-    # Three prime side for positive strand orientation (rightward facing)
-    if("three_prime_utr" %in% gene_name_text$side_of_anno & 1 %in% gene_name_text$orientation) {
-      annotated_gene <- annotated_gene +
-         geom_text(data = gene_name_text %>%
-                            dplyr::filter(side_of_anno == "three_prime_utr" & orientation == 1),
-                   aes(x = end,
-                       y = y_axis,
-                       label = label),
-                   fontface = "italic",
-                   size = gene_label_size,
-                   nudge_x = gene_label_nudge)
-    }
-
-    # Three prime side for negative strand orientation (leftward facing)
-    if("three_prime_utr" %in% gene_name_text$side_of_anno & 0 %in% gene_name_text$orientation) {
-      annotated_gene <- annotated_gene +
-         geom_text(data = gene_name_text %>%
-                            dplyr::filter(side_of_anno == "three_prime_utr" & orientation == 0),
-                   aes(x = start,
-                       y = y_axis,
-                       label = label),
-                   fontface = "italic",
-                   size = gene_label_size,
-                   nudge_x = -gene_label_nudge)
-    }
-  }
-
-  # Get the settings for the locus view x-axis
-  locus_x_axis <- get_locus_axis(input_window = window_of_interest, input_flank = flank)
-
-  # Build the track
-  gg_gene_track <- annotated_gene +
-    ggplot2::scale_x_continuous(name = locus_x_axis$name, labels = locus_x_axis$labels, limits = locus_x_axis$limits, expand = c(0.01,0.01)) +
-    ggplot2::labs(y = "Genes") +
-    ggplot2::theme(legend.position = "none",
-                   panel.background = element_blank(),
-                   panel.grid.minor = element_blank(),
-                   panel.grid.major.y = element_blank(),
-                   panel.grid.major.x = element_blank(),
-                   axis.line.y = element_line(linewidth = 0.3),
-                   axis.title.y = element_text(size = 12.5, angle = 0, vjust = 0.5),
-                   axis.text.y = element_blank(),
-                   axis.ticks.y = element_blank(),
-                   plot.margin = unit(c(0.1,5,3,5), "mm"))
-
-  # Add x-axis theme
-  if(x_axis_theme == "full") {
-    gg_gene_track <- gg_gene_track +
-                       theme(axis.line.x = element_line(linewidth = 0.3),
-                             axis.title.x = element_blank(),
-                             axis.ticks.x = element_line(color = "black"),
-                             axis.ticks.length.x = unit(1.25, units = "mm"))
-
-  } else if(x_axis_theme == "ticks") {
-    gg_gene_track <- gg_gene_track +
-                       theme(axis.title.x = element_blank(),
-                             axis.text.x = element_blank(),
-                             axis.line.x = element_blank(),
-                             axis.ticks.x = element_line(color = "black"),
-                             axis.ticks.length.x = unit(1.25, units = "mm"))
-
-  } else if(x_axis_theme == "blank") {
-    gg_gene_track <- gg_gene_track +
-                       theme(axis.title.x = element_blank(),
-                             axis.text.x = element_blank(),
-                             axis.line.x = element_blank(),
-                             axis.ticks.x = element_blank())
-  }
-
-  # Output plot
-  return(gg_gene_track)
-}
+#' @keywords internal
+NULL
 
 # TODO: incorporate this to plotting tracks
 # Remove first tick mark from y axis
@@ -533,7 +290,7 @@ breaks_minus_one <- function(x) {
 #' Counts mutations at each position in the window and draws them as lollipops
 #' sized by count.
 #'
-#' @inheritParams geom_gene_track
+#' @inheritParams legacy_track_params
 #' @param data data.table of mutations with `seqnames`, `start`, and `end` columns.
 #' @param maf_file Not yet implemented; reserved for reading mutations from a MAF.
 #' @param vcf_file Not yet implemented; reserved for reading mutations from a VCF.
@@ -616,7 +373,7 @@ geom_count_mutations <- function(data = NULL, maf_file = NULL, vcf_file = NULL,
 #' @description
 #' Scatter of mutation VAF across the window, colored by local point density.
 #'
-#' @inheritParams geom_gene_track
+#' @inheritParams legacy_track_params
 #' @param data data.table of mutations with `seqnames`, `start`, `end`, and `VAF` columns.
 #' @param mut_file Not yet implemented; reserved for reading mutations from file.
 #' @param vcf_file Not yet implemented; reserved for reading mutations from a VCF.
@@ -701,7 +458,7 @@ geom_vaf_landscape <- function(data = NULL, mut_file = NULL, vcf_file = NULL,
 #' 12-state ChromHMM model, and every column other than the coordinates is treated as
 #' a state score.
 #'
-#' @inheritParams geom_gene_track
+#' @inheritParams legacy_track_params
 #' @param data data.table with `seqnames`, `start`, `end`, and one score column per state.
 #' @param epilogo_file Not yet implemented; reserved for reading epilogos output from file.
 #' @param contrast Use a black panel background, default: TRUE
@@ -834,7 +591,7 @@ geom_epilogo_col <- function(data = NULL, epilogo_file = NULL, window_of_interes
 #' Draws arcs between interacting positions that fall entirely within the window,
 #' with width and color scaled by interaction score.
 #'
-#' @inheritParams geom_gene_track
+#' @inheritParams legacy_track_params
 #' @param data data.table of interactions with `seqnames`, `start`, and `end` columns.
 #' @param bedpe_file Not yet implemented; reserved for reading interactions from a BEDPE.
 #' @param aes_start_column Name of the column with the first anchor position.
@@ -932,7 +689,7 @@ geom_interactions <- function(data = NULL, bedpe_file = NULL, window_of_interest
 #' Draws SV breakpoints within the window as points colored by SV class
 #' (`DEL`, `DUP`, `INV`, `TRA`).
 #'
-#' @inheritParams geom_gene_track
+#' @inheritParams legacy_track_params
 #' @param data data.table of breakpoints with `seqnames`, `start`, and `end` columns.
 #' @param bedpe_file Not yet implemented; reserved for reading breakpoints from a BEDPE.
 #' @param aes_y_column Name of the column mapped to the y-axis.
@@ -1049,7 +806,7 @@ geom_sv_breakpoints <- function(data = NULL, bedpe_file = NULL, window_of_intere
 #' Draws a quantitative signal (e.g. bedGraph-like coverage) as bars at the
 #' midpoint of each range within the window.
 #'
-#' @inheritParams geom_gene_track
+#' @inheritParams legacy_track_params
 #' @param data GRanges object with one or more signal columns.
 #' @param file Not yet implemented; reserved for reading bigWig/bedGraph files.
 #' @param aes_y_column Name of the signal column, or the name given to the melted

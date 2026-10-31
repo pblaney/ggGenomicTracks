@@ -4,10 +4,16 @@
 \alias{theme_genomic}
 \title{Theme for genomic track plots}
 \usage{
-theme_genomic(x_axis = c("full", "ticks", "blank"), base_size = 11)
+theme_genomic(
+  x_axis = c("full", "ticks", "blank"),
+  y_axis = c("full", "blank"),
+  base_size = 11
+)
 }
 \arguments{
 \item{x_axis}{Style of the x-axis, one of \code{"full"}, \code{"ticks"}, or \code{"blank"}.}
+
+\item{y_axis}{Style of the y-axis, \code{"full"} or \code{"blank"} (no line, title, text, or ticks).}
 
 \item{base_size}{Base font size, default: 11}
 }
@@ -18,6 +24,7 @@ ggplot2 theme object
 Minimal theme for a single genomic track: blank panel, y-axis line with a
 horizontal title, and tight margins for stacking tracks. The x-axis style is set
 with \code{x_axis}; use \code{"full"} on the bottom track of a stack and \code{"ticks"} or
-\code{"blank"} on the tracks above it.
+\code{"blank"} on the tracks above it. Use \code{y_axis = "blank"} for tracks labeled within
+the panel, such as \code{\link[=geom_gene_track]{geom_gene_track()}}.
 }
 \keyword{theme}
