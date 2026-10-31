@@ -235,6 +235,6 @@ locus_cytoband_label <- function(window_of_interest, flank = 0, data = NULL) {
   locus <- parse_locus(window_of_interest = window_of_interest, flank = flank)
   overlap <- subset_to_locus(get_ideogram_bands(chrom = locus$chrom, data = data), locus = locus)
   band_span <- unique(c(overlap$name[1], overlap$name[nrow(overlap)]))
-  paste0(stringr::str_replace(string = locus$chrom, pattern = "^chr", replacement = "Chr "),
+  paste0(stringr::str_replace(string = locus$chrom, pattern = "^chr", replacement = "Position on chromosome "),
          " (", paste(band_span, collapse = "-"), ")")
 }

@@ -25,6 +25,7 @@ Imports:
     ggplot2,
     ggpointdensity,
     grid,
+    gtable,
     gUtils,
     paletteer,
     purrr,
