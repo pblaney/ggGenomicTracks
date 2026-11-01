@@ -20,8 +20,7 @@ ggplot2 scale
 }
 \description{
 Colors for the JaBbA copy number states, from homozygous deletion in dark blue to
-amplification in dark red, with neutral in gray. Use the color scale with
-\code{\link[=geom_copy_number]{geom_copy_number()}} and the fill scale with \code{\link[=geom_bed_track]{geom_bed_track()}} to show states across
-many samples.
+amplification in dark red, with neutral in gray. Use the fill scale with
+\code{\link[=geom_copy_number]{geom_copy_number()}} or with \code{\link[=geom_bed_track]{geom_bed_track()}} to show states across many samples.
 }
 \keyword{scale}

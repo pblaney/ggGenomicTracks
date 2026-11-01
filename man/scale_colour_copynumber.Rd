@@ -21,6 +21,6 @@ ggplot2 scale
 Colors for integer copy number from \code{\link[devgru:copynumber_palettier]{devgru::copynumber_palettier()}}: blue for 0
 and 1, gray for 2, and orange to dark red from 3 up to the highest copy number in
 the plot. Map a discrete copy number, e.g. \code{aes(fill = factor(total_cn))} with
-\code{\link[=geom_bed_track]{geom_bed_track()}}; \code{\link[=geom_copy_number]{geom_copy_number()}} uses the color scale by default.
+\code{\link[=geom_bed_track]{geom_bed_track()}}; \code{\link[=geom_copy_number]{geom_copy_number()}} uses the fill scale by default.
 }
 \keyword{scale}

@@ -10,6 +10,7 @@ geom_copy_number(
   mapping = NULL,
   data = NULL,
   cn_cap = NULL,
+  bar_height = 1.5,
   show_first_y_label = TRUE,
   ...,
   na.rm = FALSE,
@@ -18,7 +19,7 @@ geom_copy_number(
 )
 }
 \arguments{
-\item{mapping}{Set of aesthetic mappings created by \code{\link[ggplot2:aes]{ggplot2::aes()}}, e.g. \code{colour}.}
+\item{mapping}{Set of aesthetic mappings created by \code{\link[ggplot2:aes]{ggplot2::aes()}}, e.g. \code{fill}.}
 
 \item{data}{GRanges object or data frame of copy number segments with \code{seqnames},
 \code{start}, \code{end}, and \code{total_cn} columns, e.g. a JaBbA \code{cnv.bed} profile.}
@@ -26,25 +27,28 @@ geom_copy_number(
 \item{cn_cap}{Highest copy number shown, default: no cap. Segments above it are drawn
 at the cap with a triangle marker.}
 
+\item{bar_height}{Height of the bars in mm, default: 1.5}
+
 \item{show_first_y_label}{Label the lowest y-axis break, default: TRUE. See
 \code{\link[=label_drop_first]{label_drop_first()}}.}
 
-\item{...}{Other arguments passed to \code{\link[ggplot2:layer]{ggplot2::layer()}}, e.g. \code{colour}, \code{linewidth}
-(bar thickness in mm, default: 1.5), or \code{alpha}.}
+\item{...}{Other arguments passed to \code{\link[ggplot2:layer]{ggplot2::layer()}}, e.g. \code{fill}, \code{colour} (bar
+outline), or \code{alpha}.}
 
 \item{na.rm, show.legend, inherit.aes}{See \code{\link[ggplot2:layer]{ggplot2::layer()}}.}
 }
 \value{
 List of a ggplot2 layer, a y-axis scale, a y-axis title, and a copy number
-color scale unless \code{colour} is given, added to a plot with \code{+}
+fill scale unless \code{fill} is given, added to a plot with \code{+}
 }
 \description{
-Draws copy number segments as horizontal bars at their integer copy number, as in
-gTrack. \code{xmin}, \code{xmax}, and \code{y} default to the \code{start}, \code{end}, and \code{total_cn}
+Draws copy number segments as thin horizontal bars at their integer copy number, as
+in gTrack. \code{xmin}, \code{xmax}, and \code{y} default to the \code{start}, \code{end}, and \code{total_cn}
 columns, as in JaBbA copy number profiles; map \code{y} to another column such as
-\code{major_allele} to change it. Segments are colored by their integer copy number with
-\code{\link[=scale_colour_copynumber]{scale_colour_copynumber()}} unless \code{colour} is mapped or set, e.g. by state with
-\code{aes(colour = cn_state)} and \code{\link[=scale_colour_cn_state]{scale_colour_cn_state()}}.
+\code{major_allele} to change it. Segments are filled by their integer copy number with
+\code{\link[=scale_fill_copynumber]{scale_fill_copynumber()}} unless \code{fill} is mapped or set, e.g. by state with
+\code{aes(fill = cn_state)} and \code{\link[=scale_fill_cn_state]{scale_fill_cn_state()}}. Bars use \code{fill} so \code{colour} stays
+free for \code{\link[=geom_junction]{geom_junction()}} in the same plot.
 
 Segments above \code{cn_cap} are drawn at the cap and marked with a triangle, so a few
 highly amplified segments do not flatten the rest of the profile.
@@ -59,8 +63,7 @@ cn <- data.table::fread("sample.jabba.phased.cnv.bed")
 data.table::setnames(cn, "chrom", "seqnames")
 
 ggplot2::ggplot(cn) +
-  geom_copy_number(ggplot2::aes(colour = cn_state), cn_cap = 8) +
-  scale_colour_cn_state() +
+  geom_copy_number(cn_cap = 8) +
   coord_genome() +
   theme_genomic()
 }
