@@ -17,6 +17,9 @@
 #' @param size_range Range of point sizes in mm for the smallest and largest counts,
 #'   default: `c(1.5, 4)`. Point area grows with the count. Map `size` to
 #'   `after_stat(count)` instead to get a size legend.
+#' @param show_first_y_label Label the lowest y-axis break, default: TRUE. Set to
+#'   `FALSE` to blank it, keeping the tick, so it does not collide with the top label of
+#'   the track below in a tightly stacked plot. See [label_drop_first()].
 #' @param stem_colour,stem_alpha,stem_linewidth Color, opacity, and width in mm of the
 #'   stems.
 #' @param ... Other arguments passed to [ggplot2::layer()], e.g. `fill`, `colour`
@@ -45,6 +48,7 @@
 #'   theme_genomic()
 #' }
 geom_mutation_count <- function(mapping = NULL, data = NULL, size_range = c(1.5, 4),
+                                show_first_y_label = TRUE,
                                 stem_colour = "gray10", stem_alpha = 0.65, stem_linewidth = 0.5,
                                 ..., na.rm = FALSE, show.legend = NA, inherit.aes = TRUE) {
   # Default position aesthetic, overridden by user mapping
@@ -61,8 +65,13 @@ geom_mutation_count <- function(mapping = NULL, data = NULL, size_range = c(1.5,
                                               stem_alpha = stem_alpha, stem_linewidth = stem_linewidth,
                                               na.rm = na.rm, ...))
 
+  count_labels <- scales::label_number(accuracy = 1)
+  if(!show_first_y_label) {
+    count_labels <- label_drop_first(count_labels)
+  }
+
   list(count_layer,
-       ggplot2::scale_y_continuous(breaks = integer_breaks, labels = scales::label_number(accuracy = 1),
+       ggplot2::scale_y_continuous(breaks = integer_breaks, labels = count_labels,
                                    expand = ggplot2::expansion(mult = c(0, 0.15))),
        ggplot2::labs(y = "Mutation\nCount"))
 }

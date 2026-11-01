@@ -10,6 +10,7 @@ geom_mutation_count(
   mapping = NULL,
   data = NULL,
   size_range = c(1.5, 4),
+  show_first_y_label = TRUE,
   stem_colour = "gray10",
   stem_alpha = 0.65,
   stem_linewidth = 0.5,
@@ -28,6 +29,10 @@ columns, one row per mutation, e.g. from a MAF or VCF read with devgru.}
 \item{size_range}{Range of point sizes in mm for the smallest and largest counts,
 default: \code{c(1.5, 4)}. Point area grows with the count. Map \code{size} to
 \code{after_stat(count)} instead to get a size legend.}
+
+\item{show_first_y_label}{Label the lowest y-axis break, default: TRUE. Set to
+\code{FALSE} to blank it, keeping the tick, so it does not collide with the top label of
+the track below in a tightly stacked plot. See \code{\link[=label_drop_first]{label_drop_first()}}.}
 
 \item{stem_colour, stem_alpha, stem_linewidth}{Color, opacity, and width in mm of the
 stems.}

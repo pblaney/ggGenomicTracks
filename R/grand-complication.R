@@ -274,14 +274,6 @@ get_locus_axis <- function(input_window, input_flank) {
 #' @keywords internal
 NULL
 
-# TODO: incorporate this to plotting tracks
-# Remove first tick mark from y axis
-# https://stackoverflow.com/questions/66279940/remove-first-label-of-y-axis
-breaks_minus_one <- function(x) {
-  x <- scales::pretty_breaks(n = 3)
-  x[x<=0] <- NA
-  x
-}
 
 #' @name geom_vaf_landscape
 #' @title Variant allele frequency track
