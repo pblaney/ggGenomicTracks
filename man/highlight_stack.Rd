@@ -69,7 +69,7 @@ win <- "chr3:187744850-187745350"
 
 stack <- patchwork::wrap_plots(
   plot_ideogram(win, flank = 250),
-  ggplot2::ggplot(snvs) + geom_count_mutations(...) + coord_locus(win, 250) +
+  ggplot2::ggplot(snvs) + geom_mutation_count() + coord_locus(win, 250) +
     theme_genomic(x_axis = "ticks"),
   ggplot2::ggplot() + geom_gene_track(genes_of_interest = "BCL6") +
     coord_locus(win, 250) + theme_genomic(y_axis = "blank"),
