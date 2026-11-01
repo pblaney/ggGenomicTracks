@@ -26,7 +26,7 @@ theme_genomic <- function(x_axis = c("full", "ticks", "blank"), y_axis = c("full
                    panel.grid = ggplot2::element_blank(),
                    axis.line.y = ggplot2::element_line(linewidth = 0.3),
                    axis.title.y = ggplot2::element_text(size = ggplot2::rel(1.14), angle = 0, vjust = 0.5),
-                   axis.ticks.y = ggplot2::element_line(linewidth = 1, color = "black"),
+                   axis.ticks.y = ggplot2::element_line(linewidth = 0.5, color = "black"),
                    axis.ticks.length.y = ggplot2::unit(1, units = "mm"),
                    axis.title.x = ggplot2::element_blank(),
                    plot.margin = ggplot2::unit(c(0.1, 0.1, 0.1, 0.1), "mm"))
