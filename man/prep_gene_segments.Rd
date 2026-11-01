@@ -15,7 +15,7 @@ prep_gene_segments(data, genes_of_interest = NULL)
 draws every gene in the window.}
 }
 \description{
-Converts to a data frame, subsets to genes of interest, and adds strand direction
-columns used by the exon and intron layers. For internal use only.
+Converts to a data frame, subsets to genes of interest, and adds the strand direction
+column used by the exon and intron layers. For internal use only.
 }
 \keyword{internal}

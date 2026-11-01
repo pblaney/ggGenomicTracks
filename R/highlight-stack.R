@@ -4,9 +4,9 @@
 #' @description
 #' Shades one or more sub-regions as unbroken bands running through every track of a
 #' stack, including the space between tracks. Bands cover each run of adjacent tracks
-#' that share the same [coord_locus()] window; other plots in the stack, such as the
-#' ideogram from [plot_ideogram()], are left alone. Apply it as the last step, after
-#' the stack is assembled with patchwork.
+#' that share the same [coord_locus()] or [coord_loci()] windows; other plots in the
+#' stack, such as the ideogram from [plot_ideogram()], are left alone. Apply it as the
+#' last step, after the stack is assembled with patchwork.
 #'
 #' Bands are drawn over the data by default, so they stay visible on tracks whose data
 #' covers the whole panel, like dense bed tracks. Adjust `alpha` to set how strongly
@@ -27,7 +27,7 @@
 #' @param colour Outline color of the bands, default: none
 #' @param layer Draw the bands `"above"` (default) or `"below"` the track data.
 #' @param tracks Positions of the plots in the stack to cover, e.g. `3:5`. By default
-#'   all plots using [coord_locus()]. Bands still run unbroken through adjacent tracks.
+#'   all plots using [coord_locus()] or [coord_loci()]. Bands still run unbroken through adjacent tracks.
 #' @param show_legend Add a legend of the region labels, default: TRUE when regions are
 #'   labeled.
 #' @param legend_title Title of the legend, default: "Highlight"
@@ -81,23 +81,29 @@ highlight_stack <- function(stack, regions, fill = NULL, alpha = 0.3, colour = N
   panel_order <- as.integer(stringr::str_extract(panel_layout$name, "[0-9]+$"))
   panel_layout <- panel_layout[order(panel_order), , drop = FALSE]
 
-  # Window of each locus track, as the chromosome and visible x-range, NA otherwise
-  track_windows <- vapply(plots, function(plot) {
-    if(!inherits(plot$coordinates, "CoordLocus")) {
+  # Window layout and visible x-range of each locus track, NA otherwise
+  track_coords <- lapply(plots, function(plot) {
+    if(!inherits(plot$coordinates, "CoordLoci")) {
+      return(NULL)
+    }
+    list(layout = plot$coordinates$layout,
+         x_range = ggplot2::ggplot_build(plot)$layout$panel_params[[1]]$x.range)
+  })
+  track_windows <- vapply(track_coords, function(track) {
+    if(is.null(track)) {
       return(NA_character_)
     }
-    x_range <- ggplot2::ggplot_build(plot)$layout$panel_params[[1]]$x.range
-    paste(plot$coordinates$locus$chrom, x_range[1], x_range[2])
+    paste(c(track$layout$chrom, track$layout$lin_start, track$layout$lin_end, track$x_range), collapse = " ")
   }, character(1))
   if(!is.null(tracks)) {
     not_locus <- tracks[is.na(track_windows[tracks])]
     if(length(not_locus) > 0) {
-      cli::cli_warn("Skipping plot{?s} {not_locus} in {.arg tracks}, which do{?es/} not use {.fn coord_locus}.")
+      cli::cli_warn("Skipping plot{?s} {not_locus} in {.arg tracks}, which do{?es/} not use {.fn coord_locus} or {.fn coord_loci}.")
     }
     track_windows[setdiff(seq_along(track_windows), tracks)] <- NA
   }
   if(all(is.na(track_windows))) {
-    cli::cli_abort("No plots to highlight; none of the selected plots in {.arg stack} use {.fn coord_locus}.")
+    cli::cli_abort("No plots to highlight; none of the selected plots in {.arg stack} use {.fn coord_locus} or {.fn coord_loci}.")
   }
 
   # One band per region for each run of adjacent tracks sharing a window
@@ -105,14 +111,21 @@ highlight_stack <- function(stack, regions, fill = NULL, alpha = 0.3, colour = N
   run_ends <- cumsum(window_runs$lengths)
   run_starts <- run_ends - window_runs$lengths + 1
   for(run in which(!is.na(window_runs$values))) {
-    window_parts <- strsplit(window_runs$values[run], " ")[[1]]
-    run_regions <- regions[is.na(regions$seqnames) |
-                             stringr::str_remove(regions$seqnames, "^chr") == stringr::str_remove(window_parts[1], "^chr"), ,
-                           drop = FALSE]
+    track <- track_coords[[run_starts[run]]]
+    x_range <- track$x_range
+
+    # Regions without a chromosome belong to a single window; convert to the linear axis
+    run_regions <- regions
+    if(anyNA(run_regions$seqnames)) {
+      if(nrow(track$layout) > 1) {
+        cli::cli_abort("{.arg regions} need a chromosome to highlight tracks with several windows.")
+      }
+      run_regions$seqnames[is.na(run_regions$seqnames)] <- track$layout$chrom
+    }
+    run_regions <- linearize_layer(run_regions, track$layout)
     if(nrow(run_regions) == 0) {
       next
     }
-    x_range <- as.numeric(window_parts[2:3])
     run_panels <- panel_layout[run_starts[run]:run_ends[run], , drop = FALSE]
 
     band_grob <- grid::rectGrob(x = grid::unit((run_regions$start - x_range[1]) / diff(x_range), "npc"),

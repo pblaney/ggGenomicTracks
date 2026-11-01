@@ -40,7 +40,7 @@ single region is orange and labeled regions use a hue palette.}
 \item{layer}{Draw the bands \code{"above"} (default) or \code{"below"} the track data.}
 
 \item{tracks}{Positions of the plots in the stack to cover, e.g. \code{3:5}. By default
-all plots using \code{\link[=coord_locus]{coord_locus()}}. Bands still run unbroken through adjacent tracks.}
+all plots using \code{\link[=coord_locus]{coord_locus()}} or \code{\link[=coord_loci]{coord_loci()}}. Bands still run unbroken through adjacent tracks.}
 
 \item{show_legend}{Add a legend of the region labels, default: TRUE when regions are
 labeled.}
@@ -55,9 +55,9 @@ draw, save it with \code{\link[ggplot2:ggsave]{ggplot2::ggsave()}}, or wrap it w
 \description{
 Shades one or more sub-regions as unbroken bands running through every track of a
 stack, including the space between tracks. Bands cover each run of adjacent tracks
-that share the same \code{\link[=coord_locus]{coord_locus()}} window; other plots in the stack, such as the
-ideogram from \code{\link[=plot_ideogram]{plot_ideogram()}}, are left alone. Apply it as the last step, after
-the stack is assembled with patchwork.
+that share the same \code{\link[=coord_locus]{coord_locus()}} or \code{\link[=coord_loci]{coord_loci()}} windows; other plots in the
+stack, such as the ideogram from \code{\link[=plot_ideogram]{plot_ideogram()}}, are left alone. Apply it as the
+last step, after the stack is assembled with patchwork.
 
 Bands are drawn over the data by default, so they stay visible on tracks whose data
 covers the whole panel, like dense bed tracks. Adjust \code{alpha} to set how strongly

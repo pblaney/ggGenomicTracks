@@ -90,7 +90,9 @@ geom_gene_track <- function(mapping = NULL, data = NULL, genes_of_interest = NUL
                                      linewidth = utr_linewidth, inherit.aes = inherit.aes)
 
   # Introns as lines with an arrow at the midpoint pointing in the direction of transcription
-  intron_mapping <- ggplot2::aes(x = arrow_from, xend = arrow_to)
+  # Introns are drawn 5' to 3'; positions are taken from start/end at plot time so
+  # coord_loci() conversion applies
+  intron_mapping <- ggplot2::aes(x = ifelse(forward, start, end), xend = ifelse(forward, end, start))
   intron_mapping$y <- y_aes
   intron_mapping$yend <- y_aes
   intron_layer <- ggarchery::geom_arrowsegment(mapping = intron_mapping,
@@ -102,7 +104,8 @@ geom_gene_track <- function(mapping = NULL, data = NULL, genes_of_interest = NUL
                                                inherit.aes = inherit.aes)
 
   # One label per gene at the requested end
-  label_mapping <- ggplot2::aes(x = label_x, xmin = start, xmax = end, label = gene_name, hjust = label_hjust)
+  label_mapping <- ggplot2::aes(x = ifelse(label_hjust == 1, start, end), xmin = start, xmax = end,
+                                label = gene_name, hjust = label_hjust)
   label_mapping$y <- y_aes
   label_layer <- ggplot2::layer(geom = GeomGeneLabel, stat = ggplot2::StatIdentity,
                                 position = ggplot2::PositionIdentity,
@@ -120,8 +123,8 @@ geom_gene_track <- function(mapping = NULL, data = NULL, genes_of_interest = NUL
 #' @title Prepare gene segment data for plotting
 #'
 #' @description
-#' Converts to a data frame, subsets to genes of interest, and adds strand direction
-#' columns used by the exon and intron layers. For internal use only.
+#' Converts to a data frame, subsets to genes of interest, and adds the strand direction
+#' column used by the exon and intron layers. For internal use only.
 #'
 #' @inheritParams geom_gene_track
 #' @keywords internal
@@ -137,10 +140,7 @@ prep_gene_segments <- function(data, genes_of_interest = NULL) {
   }
 
   # Strand direction: exon arrows point forward on + strand, introns drawn 5' to 3'
-  is_reverse <- as.character(gene_dt$strand) == "-"
-  gene_dt$forward <- !is_reverse
-  gene_dt$arrow_from <- ifelse(is_reverse, gene_dt$end, gene_dt$start)
-  gene_dt$arrow_to <- ifelse(is_reverse, gene_dt$start, gene_dt$end)
+  gene_dt$forward <- as.character(gene_dt$strand) != "-"
   gene_dt
 }
 
@@ -178,7 +178,6 @@ get_gene_labels <- function(gene_dt, genes_of_interest = NULL, gene_name_side = 
 
   # Label at the left end of the gene sits left of it, and vice versa
   label_at_left <- (side == "five_prime") == gene_labels$forward
-  gene_labels$label_x <- ifelse(label_at_left, gene_labels$start, gene_labels$end)
   gene_labels$label_hjust <- ifelse(label_at_left, 1, 0)
   gene_labels
 }

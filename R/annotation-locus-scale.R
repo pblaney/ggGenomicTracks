@@ -6,7 +6,9 @@
 #' chosen from the visible x-range (a round 1, 2, or 5 x 10^n bp up to 20% of the
 #' width), so it adapts to any zoom. With [coord_locus()] the coordinates show the
 #' exact window, e.g. "chr3:187,729,001-187,756,500 (27,500 bp)"; otherwise the
-#' visible range is shown without a chromosome.
+#' visible range is shown without a chromosome. With several windows from
+#' [coord_loci()], only the scale bar is drawn, and nothing is drawn when the windows
+#' have equal widths, as each then has its own scale.
 #'
 #' Add to any track, or recreate a standalone scale track with
 #' `ggplot() + annotation_locus_scale(location = "middle") + coord_locus(win) + theme_void()`.
@@ -55,14 +57,21 @@ GeomLocusScale <- ggplot2::ggproto("GeomLocusScale", ggplot2::Geom,
                         text_size = 3.4, pad = 0.02) {
     # Visible x-range, and the exact window if zoomed with coord_locus()
     visible_range <- panel_params$x.range
-    if(inherits(coord, "CoordLocus")) {
-      window_start <- coord$locus$start
-      window_end <- coord$locus$end
-      window_chrom <- coord$locus$chrom
+    window_chrom <- NULL
+    if(inherits(coord, "CoordLoci") && nrow(coord$layout) > 1) {
+      # Across several windows the coordinates are not one range, and with equal widths
+      # the windows have different scales so no single bar applies
+      show_coordinates <- FALSE
+      if(any(abs(coord$layout$scale - 1) > 1e-8)) {
+        return(grid::nullGrob())
+      }
+    } else if(inherits(coord, "CoordLoci")) {
+      window_start <- coord$layout$start
+      window_end <- coord$layout$end
+      window_chrom <- coord$layout$chrom
     } else {
       window_start <- ceiling(visible_range[1])
       window_end <- floor(visible_range[2])
-      window_chrom <- NULL
     }
 
     # Bar spans a round length of up to 20% of the visible width

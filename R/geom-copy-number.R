@@ -1,0 +1,235 @@
+#' @name geom_copy_number
+#' @title Copy number segment track
+#'
+#' @description
+#' Draws copy number segments as horizontal bars at their integer copy number, as in
+#' gTrack. `xmin`, `xmax`, and `y` default to the `start`, `end`, and `total_cn`
+#' columns, as in JaBbA copy number profiles; map `y` to another column such as
+#' `major_allele` to change it. Segments are colored by their integer copy number with
+#' [scale_colour_copynumber()] unless `colour` is mapped or set, e.g. by state with
+#' `aes(colour = cn_state)` and [scale_colour_cn_state()].
+#'
+#' Segments above `cn_cap` are drawn at the cap and marked with a triangle, so a few
+#' highly amplified segments do not flatten the rest of the profile.
+#'
+#' Also adds a y-axis scale with whole-number breaks starting at zero and a
+#' "Copy Number" y-axis title. Add your own `scale_y_continuous()` or `labs()` after it
+#' to override them.
+#'
+#' @param mapping Set of aesthetic mappings created by [ggplot2::aes()], e.g. `colour`.
+#' @param data GRanges object or data frame of copy number segments with `seqnames`,
+#'   `start`, `end`, and `total_cn` columns, e.g. a JaBbA `cnv.bed` profile.
+#' @param cn_cap Highest copy number shown, default: no cap. Segments above it are drawn
+#'   at the cap with a triangle marker.
+#' @param show_first_y_label Label the lowest y-axis break, default: TRUE. See
+#'   [label_drop_first()].
+#' @param ... Other arguments passed to [ggplot2::layer()], e.g. `colour`, `linewidth`
+#'   (bar thickness in mm, default: 1.5), or `alpha`.
+#' @param na.rm,show.legend,inherit.aes See [ggplot2::layer()].
+#'
+#' @returns List of a ggplot2 layer, a y-axis scale, a y-axis title, and a copy number
+#'   color scale unless `colour` is given, added to a plot with `+`
+#' @export
+#' @keywords geom
+#'
+#' @examples
+#' \dontrun{
+#' cn <- data.table::fread("sample.jabba.phased.cnv.bed")
+#' data.table::setnames(cn, "chrom", "seqnames")
+#'
+#' ggplot2::ggplot(cn) +
+#'   geom_copy_number(ggplot2::aes(colour = cn_state), cn_cap = 8) +
+#'   scale_colour_cn_state() +
+#'   coord_genome() +
+#'   theme_genomic()
+#' }
+geom_copy_number <- function(mapping = NULL, data = NULL, cn_cap = NULL, show_first_y_label = TRUE, ...,
+                             na.rm = FALSE, show.legend = NA, inherit.aes = TRUE) {
+  # Default segment aesthetics, overridden by user mapping
+  cn_mapping <- ggplot2::aes(xmin = start, xmax = end, y = total_cn)
+  for(aes_name in names(mapping)) {
+    cn_mapping[[aes_name]] <- mapping[[aes_name]]
+  }
+
+  # Color by integer copy number, after capping, unless colour is given
+  colour_scale <- NULL
+  if(!any(c("colour", "color") %in% c(names(cn_mapping), names(list(...))))) {
+    cn_mapping$colour <- ggplot2::aes(colour = ggplot2::after_stat(factor(y)))$colour
+    colour_scale <- scale_colour_copynumber()
+  }
+
+  cn_labels <- scales::label_number(accuracy = 1)
+  if(!show_first_y_label) {
+    cn_labels <- label_drop_first(cn_labels)
+  }
+
+  cn_layer <- ggplot2::layer(geom = GeomCopyNumber, stat = StatCopyNumber, position = ggplot2::PositionIdentity,
+                             data = as_genomic_df(data), mapping = cn_mapping,
+                             show.legend = show.legend, inherit.aes = inherit.aes,
+                             params = list(cn_cap = cn_cap, na.rm = na.rm, ...))
+
+  list(cn_layer,
+       ggplot2::scale_y_continuous(breaks = cn_breaks, labels = cn_labels, limits = c(0, NA),
+                                   expand = ggplot2::expansion(add = c(0.4, 0.6))),
+       ggplot2::labs(y = "Copy\nNumber"),
+       colour_scale)
+}
+
+#' @rdname geom_copy_number
+#' @format NULL
+#' @usage NULL
+#' @export
+StatCopyNumber <- ggplot2::ggproto("StatCopyNumber", ggplot2::Stat,
+  required_aes = c("xmin", "xmax", "y"),
+  extra_params = c("na.rm", "cn_cap"),
+
+  # Segments above the cap are drawn at the cap and flagged for a marker
+  compute_layer = function(self, data, params, layout) {
+    data$capped <- FALSE
+    if(!is.null(params$cn_cap)) {
+      data$capped <- !is.na(data$y) & data$y > params$cn_cap
+      data$y[data$capped] <- params$cn_cap
+    }
+    data
+  }
+)
+
+#' @rdname geom_copy_number
+#' @format NULL
+#' @usage NULL
+#' @export
+GeomCopyNumber <- ggplot2::ggproto("GeomCopyNumber", ggplot2::Geom,
+  required_aes = c("xmin", "xmax", "y"),
+  optional_aes = "capped",
+  default_aes = ggplot2::aes(colour = "black", linewidth = 1.5, linetype = 1, alpha = NA),
+  draw_key = ggplot2::draw_key_path,
+
+  draw_panel = function(data, panel_params, coord, lineend = "butt", na.rm = FALSE) {
+    segments <- data.frame(x = data$xmin, xend = data$xmax, y = data$y, yend = data$y,
+                           colour = data$colour, linewidth = data$linewidth, linetype = data$linetype,
+                           alpha = data$alpha, PANEL = data$PANEL, group = data$group)
+    cn_grobs <- grid::gList(ggplot2::GeomSegment$draw_panel(segments, panel_params, coord, lineend = lineend))
+
+    # Triangle at the middle of each capped segment
+    capped <- data[!is.na(data$capped) & data$capped, , drop = FALSE]
+    if(nrow(capped) > 0) {
+      markers <- data.frame(x = (capped$xmin + capped$xmax) / 2, y = capped$y,
+                            colour = capped$colour, fill = capped$colour, alpha = capped$alpha,
+                            shape = 24, size = 2.5, stroke = 0.5, PANEL = capped$PANEL, group = capped$group)
+      cn_grobs <- grid::gList(cn_grobs, ggplot2::GeomPoint$draw_panel(markers, panel_params, coord))
+    }
+    grid::gTree(children = cn_grobs, name = "copy_number")
+  }
+)
+
+#' @name scale_colour_copynumber
+#' @title Integer copy number color scales
+#'
+#' @description
+#' Colors for integer copy number from [devgru::copynumber_palettier()]: blue for 0
+#' and 1, gray for 2, and orange to dark red from 3 up to the highest copy number in
+#' the plot. Map a discrete copy number, e.g. `aes(fill = factor(total_cn))` with
+#' [geom_bed_track()]; [geom_copy_number()] uses the color scale by default.
+#'
+#' @param name Legend title, default: "Copy\\nNumber"
+#' @param ... Other arguments passed to [ggplot2::discrete_scale()], e.g. `na.value`.
+#'
+#' @returns ggplot2 scale
+#' @export
+#' @keywords scale
+scale_colour_copynumber <- function(name = "Copy\nNumber", ...) {
+  copynumber_scale(aesthetics = "colour", name = name, ...)
+}
+
+#' @rdname scale_colour_copynumber
+#' @export
+scale_fill_copynumber <- function(name = "Copy\nNumber", ...) {
+  copynumber_scale(aesthetics = "fill", name = name, ...)
+}
+
+#' @name copynumber_scale
+#' @title Build an integer copy number scale
+#'
+#' @description
+#' The palette depends on the copy numbers present, so it is built from the scale
+#' limits when values are mapped rather than from the number of levels. For internal
+#' use only.
+#'
+#' @param aesthetics Aesthetic of the scale
+#' @inheritParams scale_colour_copynumber
+#' @keywords internal
+copynumber_scale <- function(aesthetics, name, ..., na.value = "black") {
+  base_scale <- ggplot2::discrete_scale(aesthetics = aesthetics, palette = function(n) rep(NA_character_, n),
+                                        name = name, na.value = na.value, ...)
+  ggplot2::ggproto(NULL, base_scale,
+    map = function(self, x, limits = self$get_limits()) {
+      limits <- limits[!is.na(limits)]
+      cn_palette <- devgru::copynumber_palettier(as.numeric(as.character(limits)))
+      cn_colors <- stats::setNames(cn_palette$color, as.character(cn_palette$copynumber))
+      mapped <- unname(cn_colors[as.character(x)])
+      mapped[is.na(mapped)] <- self$na.value
+      mapped
+    }
+  )
+}
+
+#' @name cn_breaks
+#' @title Copy number axis breaks
+#'
+#' @description
+#' Every whole number for small copy number ranges, otherwise up to five pretty whole
+#' numbers. For internal use only.
+#'
+#' @param limits Axis limits
+#' @keywords internal
+cn_breaks <- function(limits) {
+  if(diff(limits) <= 6) {
+    return(seq(ceiling(limits[1]), floor(limits[2])))
+  }
+  breaks <- scales::breaks_pretty(n = 5)(limits)
+  breaks[breaks == round(breaks)]
+}
+
+#' @name scale_colour_cn_state
+#' @title Copy number state color scales
+#'
+#' @description
+#' Colors for the JaBbA copy number states, from homozygous deletion in dark blue to
+#' amplification in dark red, with neutral in gray. Use the color scale with
+#' [geom_copy_number()] and the fill scale with [geom_bed_track()] to show states across
+#' many samples.
+#'
+#' @param name Legend title, default: "CN State"
+#' @param ... Other arguments passed to [ggplot2::scale_colour_manual()] or
+#'   [ggplot2::scale_fill_manual()], e.g. `values` to change colors.
+#'
+#' @returns ggplot2 scale
+#' @export
+#' @keywords scale
+scale_colour_cn_state <- function(name = "CN State", ...) {
+  do.call(ggplot2::scale_colour_manual, c(list(name = name, ...), cn_state_scale_defaults(...)))
+}
+
+#' @rdname scale_colour_cn_state
+#' @export
+scale_fill_cn_state <- function(name = "CN State", ...) {
+  do.call(ggplot2::scale_fill_manual, c(list(name = name, ...), cn_state_scale_defaults(...)))
+}
+
+#' @name cn_state_scale_defaults
+#' @title Default arguments of the copy number state scales
+#'
+#' @description
+#' State colors and legend order, unless given in `...`. For internal use only.
+#'
+#' @param ... Arguments given to the scale
+#' @keywords internal
+cn_state_scale_defaults <- function(...) {
+  given <- names(list(...))
+  defaults <- list(values = cn_state_colors, breaks = names(cn_state_colors))
+  defaults[setdiff(names(defaults), given)]
+}
+
+# JaBbA copy number states, from deletion to amplification
+cn_state_colors <- c("homozygous_deletion" = "#08306B", "loss" = "#4A90C8", "neutral" = "gray60",
+                     "gain" = "#F4845F", "amplification" = "#A50F15")

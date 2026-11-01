@@ -24,7 +24,8 @@ ggplot2 theme object
 Minimal theme for a single genomic track: blank panel, y-axis line with a
 horizontal title, and tight margins for stacking tracks. The x-axis style is set
 with \code{x_axis}; use \code{"full"} on the bottom track of a stack and \code{"ticks"} or
-\code{"blank"} on the tracks above it. Use \code{y_axis = "blank"} for tracks labeled within
+\code{"blank"} on the tracks above it. The top axis is left for the window labels of
+\code{\link[=coord_loci]{coord_loci()}}. Use \code{y_axis = "blank"} for tracks labeled within
 the panel, such as \code{\link[=geom_gene_track]{geom_gene_track()}}.
 }
 \keyword{theme}

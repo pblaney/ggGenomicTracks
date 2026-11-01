@@ -27,5 +27,8 @@ in the window. Layers without a \code{seqnames} column are left untouched.
 Also adds an x-axis scale named after the chromosome (e.g. "Chr 3 (Mbp)") with
 labels in Mbp for windows wider than 10 kbp and bp otherwise. Add your own
 \code{scale_x_continuous()} after \code{coord_locus()} to override it.
+
+\code{coord_locus()} is \code{\link[=coord_loci]{coord_loci()}} with a single window, and x positions are the
+genomic coordinates themselves.
 }
 \keyword{coord}

@@ -39,7 +39,9 @@ Adds a scale bar and the window coordinates to a track panel. The bar length is
 chosen from the visible x-range (a round 1, 2, or 5 x 10^n bp up to 20\% of the
 width), so it adapts to any zoom. With \code{\link[=coord_locus]{coord_locus()}} the coordinates show the
 exact window, e.g. "chr3:187,729,001-187,756,500 (27,500 bp)"; otherwise the
-visible range is shown without a chromosome.
+visible range is shown without a chromosome. With several windows from
+\code{\link[=coord_loci]{coord_loci()}}, only the scale bar is drawn, and nothing is drawn when the windows
+have equal widths, as each then has its own scale.
 
 Add to any track, or recreate a standalone scale track with
 \code{ggplot() + annotation_locus_scale(location = "middle") + coord_locus(win) + theme_void()}.
