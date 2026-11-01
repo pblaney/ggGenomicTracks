@@ -196,6 +196,8 @@ plot_ideogram <- function(window_of_interest, flank = 0, data = NULL,
                                 labels = scales::label_comma(scale = 1e-6, suffix = " Mb"),
                                 expand = c(0.01, 0.01)) +
     ggplot2::scale_y_continuous(expand = c(0, 0)) +
+    # An explicit coord marks the ideogram as whole-chromosome, so stack_tracks() leaves it
+    ggplot2::coord_cartesian() +
     ggplot2::labs(title = locus_cytoband_label(window_of_interest = window_of_interest,
                                                flank = flank, data = data)) +
     theme_ideogram()

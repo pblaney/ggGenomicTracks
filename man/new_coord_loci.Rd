@@ -9,7 +9,8 @@ new_coord_loci(
   expand = TRUE,
   clip = "on",
   dividers = FALSE,
-  shade = NA
+  shade = NA,
+  spec = NULL
 )
 }
 \arguments{
@@ -22,6 +23,9 @@ new_coord_loci(
 \item{dividers}{Draw dashed lines between windows}
 
 \item{shade}{Fill color of every other window, or \code{NA} for none}
+
+\item{spec}{List of the coord function name and its arguments, used by
+\code{\link[=stack_tracks]{stack_tracks()}} to rebuild the coord for each track}
 }
 \description{
 Extends \code{\link[ggplot2:coord_cartesian]{ggplot2::coord_cartesian()}} with a window layout used to convert layer data

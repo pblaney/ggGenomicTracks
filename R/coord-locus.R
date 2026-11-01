@@ -108,7 +108,12 @@ coord_loci <- function(windows, flank = 0, widths = c("proportional", "equal"), 
     ggplot2::waiver()
   }
 
-  list(new_coord_loci(layout, expand = expand, clip = clip, dividers = dividers),
+  spec <- list(fun = "coord_loci",
+               args = list(windows = layout[, c("chrom", "start", "end", "label")], widths = widths, gap = gap,
+                           dividers = dividers, expand = expand, clip = clip))
+  names(spec$args$windows)[1] <- "seqnames"
+
+  list(new_coord_loci(layout, expand = expand, clip = clip, dividers = dividers, spec = spec),
        ggplot2::scale_x_continuous(name = axis_name, breaks = breaks$lin, labels = breaks$label,
                                    expand = c(0.01, 0.01), sec.axis = window_axis))
 }
@@ -158,7 +163,11 @@ coord_genome <- function(chromosomes = c(1:22, "X", "Y"), seqlengths = NULL, gap
                         label = stringr::str_remove(chrom_names, "^chr"))
   layout <- locus_layout(windows, widths = "proportional", gap = gap)
 
-  list(new_coord_loci(layout, expand = expand, clip = clip, dividers = dividers, shade = shade),
+  spec <- list(fun = "coord_genome",
+               args = list(chromosomes = chromosomes, seqlengths = seqlengths, gap = gap, dividers = dividers,
+                           shade = shade, expand = expand, clip = clip))
+
+  list(new_coord_loci(layout, expand = expand, clip = clip, dividers = dividers, shade = shade, spec = spec),
        ggplot2::scale_x_continuous(name = "Chromosome", breaks = (layout$lin_start + layout$lin_end) / 2,
                                    labels = layout$label, expand = c(0, 0)))
 }
@@ -173,15 +182,18 @@ coord_genome <- function(chromosomes = c(1:22, "X", "Y"), seqlengths = NULL, gap
 #' @param layout Window layout from [locus_layout()]
 #' @param dividers Draw dashed lines between windows
 #' @param shade Fill color of every other window, or `NA` for none
+#' @param spec List of the coord function name and its arguments, used by
+#'   [stack_tracks()] to rebuild the coord for each track
 #' @inheritParams coord_locus
 #' @keywords internal
-new_coord_loci <- function(layout, expand = TRUE, clip = "on", dividers = FALSE, shade = NA) {
+new_coord_loci <- function(layout, expand = TRUE, clip = "on", dividers = FALSE, shade = NA, spec = NULL) {
   base_coord <- ggplot2::coord_cartesian(xlim = c(min(layout$lin_start), max(layout$lin_end)),
                                          expand = expand, clip = clip)
   ggplot2::ggproto("CoordLoci", base_coord,
     layout = layout,
     dividers = dividers,
     shade = shade,
+    spec = spec,
 
     setup_data = function(self, data, params = list()) {
       lapply(data, linearize_layer, layout = self$layout)
@@ -357,7 +369,7 @@ linearize_layer <- function(data, layout) {
   }
 
   data <- as.data.frame(data)
-  chrom_key <- stringr::str_remove(as.character(data$seqnames), "^chr")
+  chrom_key <- chrom_keys(data$seqnames)
   if(!"start" %in% columns) {
     return(data[chrom_key %in% layout$chrom_key, , drop = FALSE])
   }
@@ -366,30 +378,27 @@ linearize_layer <- function(data, layout) {
   has_end <- "end" %in% columns
   range_end <- if(has_end) data$end else data$start
   clip_ranges <- nrow(layout) > 1
-  window_pieces <- lapply(seq_len(nrow(layout)), function(i) {
-    in_window <- which(chrom_key == layout$chrom_key[i] & range_end >= layout$start[i] &
-                         data$start <= layout$end[i])
-    if(length(in_window) == 0) {
-      return(NULL)
-    }
-    piece <- data[in_window, , drop = FALSE]
-    piece_start <- piece$start
-    piece_end <- range_end[in_window]
-    if(clip_ranges) {
-      piece_start <- pmax(piece_start, layout$start[i])
-      piece_end <- pmin(piece_end, layout$end[i])
-    }
-    piece$start <- to_linear(piece_start, layout, i)
-    if(has_end) {
-      piece$end <- to_linear(piece_end, layout, i)
-    }
-    piece
+  rows_by_chrom <- split(seq_len(nrow(data)), chrom_key)
+  window_rows <- lapply(seq_len(nrow(layout)), function(i) {
+    on_chrom <- rows_by_chrom[[layout$chrom_key[i]]]
+    on_chrom[range_end[on_chrom] >= layout$start[i] & data$start[on_chrom] <= layout$end[i]]
   })
-  window_pieces <- window_pieces[!vapply(window_pieces, is.null, logical(1))]
-  if(length(window_pieces) == 0) {
-    return(data[0, , drop = FALSE])
+
+  # One subset for all windows, then positions converted with each row's window
+  row_window <- rep(seq_len(nrow(layout)), lengths(window_rows))
+  rows <- unlist(window_rows)
+  linear_data <- data[rows, , drop = FALSE]
+  row_start <- linear_data$start
+  row_end <- range_end[rows]
+  if(clip_ranges) {
+    row_start <- pmax(row_start, layout$start[row_window])
+    row_end <- pmin(row_end, layout$end[row_window])
   }
-  do.call(rbind, window_pieces)
+  linear_data$start <- to_linear(row_start, layout, row_window)
+  if(has_end) {
+    linear_data$end <- to_linear(row_end, layout, row_window)
+  }
+  linear_data
 }
 
 #' @name linearize_anchor_pairs
@@ -407,7 +416,7 @@ linearize_anchor_pairs <- function(data, layout) {
     anchor_start <- data[[paste0("start", anchor)]]
     end_column <- paste0("end", anchor)
     anchor_end <- if(end_column %in% names(data)) data[[end_column]] else anchor_start
-    chrom_key <- stringr::str_remove(as.character(data[[paste0("seqnames", anchor)]]), "^chr")
+    chrom_key <- chrom_keys(data[[paste0("seqnames", anchor)]])
 
     anchor_window <- rep(NA_integer_, nrow(data))
     for(i in seq_len(nrow(layout))) {
@@ -428,6 +437,24 @@ linearize_anchor_pairs <- function(data, layout) {
     in_view <- in_view | !is.na(anchor_window)
   }
   data[in_view, , drop = FALSE]
+}
+
+#' @name chrom_keys
+#' @title Chromosome names without the chr prefix
+#'
+#' @description
+#' Strips the prefix from the unique names only, so it stays fast for millions of
+#' rows. For internal use only.
+#'
+#' @param seqnames Chromosome names, as a character vector or factor
+#' @keywords internal
+chrom_keys <- function(seqnames) {
+  if(is.factor(seqnames)) {
+    return(stringr::str_remove(levels(seqnames), "^chr")[as.integer(seqnames)])
+  }
+  seqnames <- as.character(seqnames)
+  unique_names <- unique(seqnames)
+  stringr::str_remove(unique_names, "^chr")[match(seqnames, unique_names)]
 }
 
 #' @name parse_locus
@@ -463,7 +490,7 @@ subset_to_locus <- function(data, locus) {
   }
 
   # Match chromosome regardless of chr prefix
-  on_chrom <- stringr::str_remove(as.character(data$seqnames), "^chr") == stringr::str_remove(locus$chrom, "^chr")
+  on_chrom <- chrom_keys(data$seqnames) == stringr::str_remove(locus$chrom, "^chr")
 
   # Match overlap with window, using start alone for single position data
   in_window <- TRUE

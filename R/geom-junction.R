@@ -192,7 +192,7 @@ GeomJunction <- ggplot2::ggproto("GeomJunction", ggplot2::Geom,
 junction_copy_number <- function(junctions, segments, cn_column = "total_cn", cn_cap = NULL) {
   junctions <- as.data.frame(junctions)
   segments <- as.data.frame(as_genomic_df(segments))
-  segment_key <- stringr::str_remove(as.character(segments$seqnames), "^chr")
+  segment_key <- chrom_keys(segments$seqnames)
 
   for(anchor in c("1", "2")) {
     position <- junctions[[paste0("start", anchor)]]
@@ -200,7 +200,7 @@ junction_copy_number <- function(junctions, segments, cn_column = "total_cn", cn
     if(strand_column %in% names(junctions)) {
       position <- ifelse(junctions[[strand_column]] == "-", position + 1, position)
     }
-    anchor_key <- stringr::str_remove(as.character(junctions[[paste0("seqnames", anchor)]]), "^chr")
+    anchor_key <- chrom_keys(junctions[[paste0("seqnames", anchor)]])
 
     anchor_cn <- rep(NA_real_, nrow(junctions))
     for(chrom in intersect(unique(anchor_key), segment_key)) {

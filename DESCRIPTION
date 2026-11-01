@@ -28,11 +28,10 @@ Imports:
     gtable,
     gUtils,
     paletteer,
+    patchwork,
     scales,
     stringr,
     utils
-Suggests:
-    patchwork
 biocViews:
 LazyData: true
 Remotes:

@@ -128,10 +128,12 @@ highlight_stack <- function(stack, regions, fill = NULL, alpha = 0.3, colour = N
     }
     run_panels <- panel_layout[run_starts[run]:run_ends[run], , drop = FALSE]
 
-    band_grob <- grid::rectGrob(x = grid::unit((run_regions$start - x_range[1]) / diff(x_range), "npc"),
-                                width = grid::unit((run_regions$end - run_regions$start) / diff(x_range), "npc"),
+    # Bands are at least 0.5 mm wide so small regions in wide windows stay visible
+    band_grob <- grid::rectGrob(x = grid::unit(((run_regions$start + run_regions$end) / 2 - x_range[1]) / diff(x_range), "npc"),
+                                width = grid::unit.pmax(grid::unit((run_regions$end - run_regions$start) / diff(x_range), "npc"),
+                                                        grid::unit(0.5, "mm")),
                                 y = grid::unit(0, "npc"), height = grid::unit(1, "npc"),
-                                just = c("left", "bottom"),
+                                just = c("centre", "bottom"),
                                 gp = grid::gpar(fill = scales::alpha(run_regions$fill, alpha), col = colour))
     stack_gtable <- gtable::gtable_add_grob(stack_gtable, band_grob,
                                             t = min(run_panels$t), b = max(run_panels$b),
