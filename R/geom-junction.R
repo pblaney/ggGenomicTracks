@@ -25,6 +25,11 @@
 #' @param scale_by_span Make arcs spanning more of the axis taller, default: TRUE
 #' @param partner_label_size Size of the partner chromosome labels on stubs in mm, or 0
 #'   for none. Default: 2.5
+#' @param arc_shape Shape of the arcs. `"arch"` (default) draws symmetric arches;
+#'   `"strand"` draws arcs leaving each breakpoint toward the side it joins, from the
+#'   `strand1` and `strand2` columns, as in gTrack: deletion-like junctions arch inward,
+#'   duplication-like junctions loop outward, and inversions hook to one side, so short
+#'   fold-back inversions show as hooks. Stubs lean the same way.
 #' @param breakpoint_marks Mark each breakpoint with a short tick pointing to the side
 #'   it joins, from the `strand1` and `strand2` columns, as in PCAWG figures. Default:
 #'   FALSE
@@ -58,15 +63,16 @@
 #'   theme_genomic()
 #' }
 geom_junction <- function(mapping = NULL, data = NULL, arc_height = NULL, arc_direction = c("up", "down"),
-                          scale_by_span = TRUE, partner_label_size = 2.5, breakpoint_marks = FALSE, ...,
-                          na.rm = FALSE, show.legend = NA, inherit.aes = TRUE) {
+                          scale_by_span = TRUE, arc_shape = c("arch", "strand"), partner_label_size = 2.5,
+                          breakpoint_marks = FALSE, ..., na.rm = FALSE, show.legend = NA, inherit.aes = TRUE) {
   arc_direction <- match.arg(arc_direction)
+  arc_shape <- match.arg(arc_shape)
 
   # Default breakpoint aesthetics, with the chromosome of an out of view partner as the
   # stub label, overridden by user mapping
   junction_mapping <- ggplot2::aes(x = start1, xend = start2,
                                    label = ifelse(is.na(start2), as.character(seqnames2), as.character(seqnames1)))
-  if(breakpoint_marks) {
+  if(breakpoint_marks || arc_shape == "strand") {
     junction_mapping$strand <- ggplot2::aes(strand = strand1)$strand
     junction_mapping$strandend <- ggplot2::aes(strandend = strand2)$strandend
   }
@@ -92,7 +98,7 @@ geom_junction <- function(mapping = NULL, data = NULL, arc_height = NULL, arc_di
                                    data = data, mapping = junction_mapping,
                                    show.legend = show.legend, inherit.aes = inherit.aes,
                                    params = list(arc_height = arc_height, arc_direction = arc_direction,
-                                                 scale_by_span = scale_by_span,
+                                                 scale_by_span = scale_by_span, arc_shape = arc_shape,
                                                  partner_label_size = partner_label_size,
                                                  breakpoint_marks = breakpoint_marks, na.rm = na.rm, ...))
   if(anchored) {
@@ -120,8 +126,8 @@ GeomJunction <- ggplot2::ggproto("GeomJunction", ggplot2::Geom,
   },
 
   draw_panel = function(data, panel_params, coord, arc_height = 0.9, arc_direction = "up",
-                        scale_by_span = TRUE, partner_label_size = 2.5, breakpoint_marks = FALSE,
-                        na.rm = FALSE) {
+                        scale_by_span = TRUE, arc_shape = "arch", partner_label_size = 2.5,
+                        breakpoint_marks = FALSE, na.rm = FALSE) {
     data <- coord$transform(data, panel_params)
     direction <- if(arc_direction == "up") 1 else -1
     line_gp <- function(rows) {
@@ -129,6 +135,18 @@ GeomJunction <- ggplot2::ggproto("GeomJunction", ggplot2::Geom,
                  lty = rows$linetype, lineend = "butt")
     }
     junction_grobs <- grid::gList()
+
+    # Direction out of the joined segment: right from a + breakpoint, which joins the
+    # segment ending at it, left from a - breakpoint, or 0 for arches
+    strand_side <- function(strand) {
+      if(arc_shape != "strand" || is.null(strand)) {
+        return(rep(0, nrow(data)))
+      }
+      side <- c("+" = 1, "-" = -1)[as.character(strand)]
+      ifelse(is.na(side), 0, side)
+    }
+    data$side <- strand_side(data$strand)
+    data$sideend <- strand_side(data$strandend)
 
     # Arcs between breakpoints in view, as cubic curves peaking at the arc height
     arcs <- data[!is.na(data$x) & !is.na(data$xend), , drop = FALSE]
@@ -141,12 +159,18 @@ GeomJunction <- ggplot2::ggproto("GeomJunction", ggplot2::Geom,
       peak <- if(direction == 1) pmax(pmin(peak, 0.98), base) else pmin(pmax(peak, 0.02), base)
       control <- (peak - 0.25 * (arcs$y + arcs$yend) / 2) / 0.75
 
+      # Arches have control points above the breakpoints; strand arcs shift them toward
+      # the joined side, continuing out of the segment end
+      reach <- pmax(0.3 * span, 0.01)
+      control_x <- arcs$x + arcs$side * reach
+      control_xend <- arcs$xend + arcs$sideend * reach
+
       t <- seq(0, 1, length.out = 40)
       b0 <- (1 - t)^3
       b1 <- 3 * (1 - t)^2 * t
       b2 <- 3 * (1 - t) * t^2
       b3 <- t^3
-      arc_x <- outer(arcs$x, b0 + b1) + outer(arcs$xend, b2 + b3)
+      arc_x <- outer(arcs$x, b0) + outer(control_x, b1) + outer(control_xend, b2) + outer(arcs$xend, b3)
       arc_y <- outer(arcs$y, b0) + outer(control, b1 + b2) + outer(arcs$yend, b3)
       junction_grobs <- grid::gList(junction_grobs,
                                     grid::polylineGrob(x = as.vector(t(arc_x)), y = as.vector(t(arc_y)),
@@ -159,14 +183,16 @@ GeomJunction <- ggplot2::ggproto("GeomJunction", ggplot2::Geom,
     if(nrow(stubs) > 0) {
       stub_x <- ifelse(is.na(stubs$x), stubs$xend, stubs$x)
       stub_y <- ifelse(is.na(stubs$x), stubs$yend, stubs$y)
+      stub_side <- ifelse(is.na(stubs$x), stubs$sideend, stubs$side)
       stub_top <- stub_y + direction * arc_height * 0.5
+      stub_tip <- grid::unit(stub_x, "npc") + grid::unit(stub_side * 2, "mm")
       junction_grobs <- grid::gList(junction_grobs,
-                                    grid::segmentsGrob(x0 = stub_x, x1 = stub_x, y0 = stub_y, y1 = stub_top,
+                                    grid::segmentsGrob(x0 = stub_x, x1 = stub_tip, y0 = stub_y, y1 = stub_top,
                                                        arrow = grid::arrow(length = grid::unit(1.5, "mm"), type = "open"),
                                                        gp = line_gp(stubs)))
       if(partner_label_size > 0 && "label" %in% names(stubs)) {
         junction_grobs <- grid::gList(junction_grobs,
-                                      grid::textGrob(label = stubs$label, x = stub_x,
+                                      grid::textGrob(label = stubs$label, x = stub_tip,
                                                      y = grid::unit(stub_top, "npc") + grid::unit(direction * 0.5, "mm"),
                                                      vjust = if(direction == 1) 0 else 1, rot = 0,
                                                      gp = grid::gpar(col = ggplot2::alpha(stubs$colour, stubs$alpha),

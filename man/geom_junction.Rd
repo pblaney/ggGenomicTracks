@@ -11,6 +11,7 @@ geom_junction(
   arc_height = NULL,
   arc_direction = c("up", "down"),
   scale_by_span = TRUE,
+  arc_shape = c("arch", "strand"),
   partner_label_size = 2.5,
   breakpoint_marks = FALSE,
   ...,
@@ -32,6 +33,12 @@ Default: 0.9 on their own, 0.25 when \code{y} is mapped.}
 \item{arc_direction}{Draw arcs \code{"up"} (default) or \code{"down"} from their breakpoints.}
 
 \item{scale_by_span}{Make arcs spanning more of the axis taller, default: TRUE}
+
+\item{arc_shape}{Shape of the arcs. \code{"arch"} (default) draws symmetric arches;
+\code{"strand"} draws arcs leaving each breakpoint toward the side it joins, from the
+\code{strand1} and \code{strand2} columns, as in gTrack: deletion-like junctions arch inward,
+duplication-like junctions loop outward, and inversions hook to one side, so short
+fold-back inversions show as hooks. Stubs lean the same way.}
 
 \item{partner_label_size}{Size of the partner chromosome labels on stubs in mm, or 0
 for none. Default: 2.5}
