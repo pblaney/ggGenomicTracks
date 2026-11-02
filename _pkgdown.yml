@@ -1,0 +1,119 @@
+url: https://pblaney.github.io/ggGenomicTracks/
+
+# Styled after the tidyverse pkgdown template used by ggplot2
+template:
+  bootstrap: 5
+  bslib:
+    primary: "#447099"
+    base_font: {google: {family: "Source Sans Pro", wght: [400, 600], ital: [0, 1]}}
+    code_font: {google: "Source Code Pro"}
+    font_scale: 1.2
+    fg: "#172431"
+    bg: "#fcfcfc"
+    border-radius: 0
+    btn-border-radius: 3px
+    grid-gutter-width: 3rem
+    pkgdown-nav-height: 78px
+
+code:
+  width: 71
+
+development:
+  mode: auto
+
+navbar:
+  type: light
+  bg: none
+  structure:
+    left: [intro, reference, articles, news]
+    right: [search, github]
+
+home:
+  links:
+  - text: devgru
+    href: https://pblaney.github.io/devgru/
+
+reference:
+- title: Coordinate systems
+  desc: >
+    Place one or more genomic windows, or the whole genome, on a single x-axis so
+    tracks and junctions can be drawn across loci.
+  contents:
+  - coord_locus
+  - coord_loci
+  - coord_genome
+
+- title: Stacking tracks
+  desc: >
+    Combine track plots that share genomic coordinates into one figure, and highlight
+    regions across all tracks.
+  contents:
+  - stack_tracks
+  - highlight_stack
+
+- title: Layers
+- subtitle: Copy number
+  contents:
+  - geom_copy_number
+- subtitle: Structural variants
+  contents:
+  - geom_junction
+  - geom_loose_end
+- subtitle: Coverage and signal
+  contents:
+  - geom_coverage
+  - geom_ridge_track
+  - geom_bed_track
+  - geom_epilogo_col
+- subtitle: Mutations
+  contents:
+  - geom_mutation_count
+  - geom_vaf_landscape
+- subtitle: Genes and annotations
+  contents:
+  - geom_gene_track
+  - annotation_locus_scale
+
+- title: Ideograms
+  desc: >
+    Chromosome ideograms with cytobands, marking the windows shown in a plot.
+  contents:
+  - geom_ideogram
+  - plot_ideogram
+  - annotate_ideogram_window
+  - annotate_ideogram_zoom
+  - theme_ideogram
+
+- title: Scales
+  desc: >
+    Color and fill scales for copy number, junction classes, chromatin states, and
+    cytobands.
+  contents:
+  - scale_colour_copynumber
+  - scale_colour_cn_state
+  - scale_colour_sv_class
+  - scale_colour_jabba_event
+  - scale_colour_sv_type
+  - scale_fill_chromhmm
+  - scale_fill_giemsa
+
+- title: Themes
+  contents:
+  - theme_genomic
+  - label_drop_first
+
+- title: Data preparation
+  desc: >
+    Helpers that add columns used by the layers, e.g. copy number at each junction
+    breakpoint.
+  contents:
+  - junction_copy_number
+  - loose_end_copy_number
+  - annotate_junctions
+  - epilogos_long
+  - get_linear_ranges_per_chromosome
+  - gr_absolute_ranges
+
+- title: Data
+  contents:
+  - cytobands_hg38

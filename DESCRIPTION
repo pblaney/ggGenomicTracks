@@ -1,13 +1,42 @@
 Package: ggGenomicTracks
 Title: Build genomic track visualizations within the ggplot2 framework
 Version: 0.0.0.9000
-Authors@R: 
-    person("Patrick", "Blaney", , "patrick.blaney@nyulangone.or", role = c("aut", "cre"),
+Authors@R:
+    person("Patrick", "Blaney", , "patrick.blaney@nyulangone.org", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-9319-8866"))
 Description: The 'ggplot2' universe of visualization in R provides extensive customization
     of plots and their components. 'ggGenomicTracks' bridges the gap between the 'ggplot2'
     extensions to create genomic track or browser-like stacked plots at loci of interest.
 License: MIT + file LICENSE
+URL: https://github.com/pblaney/ggGenomicTracks, https://pblaney.github.io/ggGenomicTracks/
+BugReports: https://github.com/pblaney/ggGenomicTracks/issues
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.2.3
+Depends:
+    R (>= 4.1.0)
+Imports:
+    BSgenome.Hsapiens.UCSC.hg38,
+    cli,
+    data.table,
+    devgru,
+    dplyr,
+    GenomeInfoDb,
+    GenomicRanges,
+    ggarchery,
+    gggenes,
+    ggplot2,
+    ggpointdensity,
+    grid,
+    gtable,
+    gUtils,
+    paletteer,
+    patchwork,
+    scales,
+    stringr,
+    utils
+biocViews:
+LazyData: true
+Remotes:
+    github::pblaney/devgru,
+    github::mskilab/gUtils
+Config/roxygen2/version: 8.0.0
