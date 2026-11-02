@@ -8,6 +8,8 @@ Description: The 'ggplot2' universe of visualization in R provides extensive cus
     of plots and their components. 'ggGenomicTracks' bridges the gap between the 'ggplot2'
     extensions to create genomic track or browser-like stacked plots at loci of interest.
 License: MIT + file LICENSE
+URL: https://github.com/pblaney/ggGenomicTracks, https://pblaney.github.io/ggGenomicTracks/
+BugReports: https://github.com/pblaney/ggGenomicTracks/issues
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 Depends:
