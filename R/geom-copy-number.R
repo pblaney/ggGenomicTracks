@@ -11,7 +11,12 @@
 #' free for [geom_junction()] in the same plot.
 #'
 #' Segments above `cn_cap` are drawn at the cap and marked with a triangle, so a few
-#' highly amplified segments do not flatten the rest of the profile.
+#' highly amplified segments do not flatten the rest of the profile. Adjacent segments
+#' are joined by thin gray reference connectors, as in JaBbA genome graphs.
+#'
+#' With `alleles`, the major and minor allele copy numbers are drawn as two
+#' semi-transparent series, red and blue, so where they are equal the bars overlap in
+#' purple.
 #'
 #' Also adds a y-axis scale with whole-number breaks starting at zero and a
 #' "Copy Number" y-axis title. Add your own `scale_y_continuous()` or `labs()` after it
@@ -23,6 +28,12 @@
 #' @param cn_cap Highest copy number shown, default: no cap. Segments above it are drawn
 #'   at the cap with a triangle marker.
 #' @param bar_height Height of the bars in mm, default: 1.5
+#' @param connectors Join adjacent segments with thin gray lines, default: TRUE.
+#'   Segments are assumed to come from one sample per layer.
+#' @param alleles Draw allele-specific copy number instead of total copy number, by
+#'   giving the major and minor allele columns, e.g. `c("major_allele",
+#'   "minor_allele")`, or `TRUE` for those JaBbA column names. Default: `NULL` for total
+#'   copy number.
 #' @param show_first_y_label Label the lowest y-axis break, default: TRUE. See
 #'   [label_drop_first()].
 #' @param ... Other arguments passed to [ggplot2::layer()], e.g. `fill`, `colour` (bar
@@ -45,7 +56,7 @@
 #'   theme_genomic()
 #' }
 geom_copy_number <- function(mapping = NULL, data = NULL, cn_cap = NULL, bar_height = 1.5,
-                             show_first_y_label = TRUE, ...,
+                             connectors = TRUE, alleles = NULL, show_first_y_label = TRUE, ...,
                              na.rm = FALSE, show.legend = NA, inherit.aes = TRUE) {
   # Default segment aesthetics, overridden by user mapping
   cn_mapping <- ggplot2::aes(xmin = start, xmax = end, y = total_cn)
@@ -53,9 +64,28 @@ geom_copy_number <- function(mapping = NULL, data = NULL, cn_cap = NULL, bar_hei
     cn_mapping[[aes_name]] <- mapping[[aes_name]]
   }
 
-  # Fill by integer copy number, after capping, unless fill is given
+  # Allele-specific copy number as major and minor series, each with its own connectors
+  layer_params <- list(...)
+  if(isTRUE(alleles)) {
+    alleles <- c("major_allele", "minor_allele")
+  }
   fill_scale <- NULL
-  if(!"fill" %in% c(names(cn_mapping), names(list(...)))) {
+  if(!is.null(alleles)) {
+    data <- if(is.null(data)) function(plot_data) allele_long(plot_data, alleles) else allele_long(data, alleles)
+    if(!"y" %in% names(mapping)) {
+      cn_mapping$y <- ggplot2::aes(y = allele_cn)$y
+    }
+    if(!"fill" %in% c(names(mapping), names(layer_params))) {
+      cn_mapping$fill <- ggplot2::aes(fill = allele)$fill
+      fill_scale <- ggplot2::scale_fill_manual(name = "Allele", values = c(Major = "#E41A1C", Minor = "#377EB8"))
+    }
+    if(!"alpha" %in% names(layer_params)) {
+      layer_params$alpha <- 0.6
+    }
+  }
+
+  # Fill by integer copy number, after capping, unless fill is given
+  if(is.null(alleles) && !"fill" %in% c(names(cn_mapping), names(layer_params))) {
     cn_mapping$fill <- ggplot2::aes(fill = ggplot2::after_stat(factor(y)))$fill
     fill_scale <- scale_fill_copynumber()
   }
@@ -66,9 +96,11 @@ geom_copy_number <- function(mapping = NULL, data = NULL, cn_cap = NULL, bar_hei
   }
 
   cn_layer <- ggplot2::layer(geom = GeomCopyNumber, stat = StatCopyNumber, position = ggplot2::PositionIdentity,
-                             data = as_genomic_df(data), mapping = cn_mapping,
+                             data = if(is.function(data)) data else as_genomic_df(data), mapping = cn_mapping,
                              show.legend = show.legend, inherit.aes = inherit.aes,
-                             params = list(cn_cap = cn_cap, bar_height = bar_height, na.rm = na.rm, ...))
+                             params = c(list(cn_cap = cn_cap, bar_height = bar_height, connectors = connectors,
+                                             connect_by_fill = !is.null(alleles), na.rm = na.rm),
+                                        layer_params))
 
   list(cn_layer,
        ggplot2::scale_y_continuous(breaks = cn_breaks, labels = cn_labels, limits = c(0, NA),
@@ -106,10 +138,35 @@ GeomCopyNumber <- ggplot2::ggproto("GeomCopyNumber", ggplot2::Geom,
   default_aes = ggplot2::aes(fill = "black", colour = NA, linewidth = 0.2, linetype = 1, alpha = NA),
   draw_key = ggplot2::draw_key_rect,
 
-  draw_panel = function(data, panel_params, coord, bar_height = 1.5, na.rm = FALSE) {
-    # Bars keep a fixed height in mm at any copy number scale
+  draw_panel = function(data, panel_params, coord, bar_height = 1.5, connectors = TRUE,
+                        connect_by_fill = FALSE, na.rm = FALSE) {
     bars <- coord$transform(data, panel_params)
-    cn_grobs <- grid::gList(grid::rectGrob(x = grid::unit(bars$xmin, "npc"), y = grid::unit(bars$y, "npc"),
+    cn_grobs <- grid::gList()
+
+    # Reference connectors between segments that touch, within each allele series and
+    # never across the boundary of two windows
+    if(connectors && nrow(bars) > 1) {
+      series <- if(connect_by_fill) bars$fill else rep("all", nrow(bars))
+      window <- if(inherits(coord, "CoordLoci")) findInterval(data$xmin, coord$layout$lin_start) else rep(1, nrow(data))
+      segment_order <- order(series, bars$xmin)
+      ordered <- bars[segment_order, , drop = FALSE]
+      ordered_series <- series[segment_order]
+      ordered_window <- window[segment_order]
+      n <- nrow(ordered)
+      touching <- ordered_series[-1] == ordered_series[-n] & ordered_window[-1] == ordered_window[-n] &
+        abs(ordered$xmin[-1] - ordered$xmax[-n]) < 0.002 &
+        ordered$y[-1] != ordered$y[-n]
+      if(any(touching)) {
+        connector_x <- (ordered$xmax[-n][touching] + ordered$xmin[-1][touching]) / 2
+        cn_grobs <- grid::gList(cn_grobs,
+                                grid::segmentsGrob(x0 = connector_x, x1 = connector_x,
+                                                   y0 = ordered$y[-n][touching], y1 = ordered$y[-1][touching],
+                                                   gp = grid::gpar(col = "gray70", lwd = 0.5)))
+      }
+    }
+
+    # Bars keep a fixed height in mm at any copy number scale
+    cn_grobs <- grid::gList(cn_grobs, grid::rectGrob(x = grid::unit(bars$xmin, "npc"), y = grid::unit(bars$y, "npc"),
                                            width = grid::unit(bars$xmax - bars$xmin, "npc"),
                                            height = grid::unit(bar_height, "mm"), just = c("left", "centre"),
                                            gp = grid::gpar(fill = ggplot2::alpha(bars$fill, bars$alpha),
@@ -177,6 +234,33 @@ copynumber_scale <- function(aesthetics, name, ..., na.value = "black") {
       mapped
     }
   )
+}
+
+#' @name allele_long
+#' @title Allele-specific copy number in long format
+#'
+#' @description
+#' Stacks the major and minor allele columns into one `allele_cn` column with an
+#' `allele` column of `"Major"` or `"Minor"`. For internal use only.
+#'
+#' @param data Data frame or GRanges of copy number segments
+#' @param alleles Names of the major and minor allele columns
+#' @keywords internal
+allele_long <- function(data, alleles) {
+  data <- as.data.frame(as_genomic_df(data))
+  missing_columns <- setdiff(alleles, names(data))
+  if(length(missing_columns) > 0) {
+    cli::cli_abort("Allele column{?s} {.field {missing_columns}} not found in the copy number data.")
+  }
+  major <- data
+  major$allele <- "Major"
+  major$allele_cn <- data[[alleles[1]]]
+  minor <- data
+  minor$allele <- "Minor"
+  minor$allele_cn <- data[[alleles[2]]]
+  long_data <- rbind(major, minor)
+  long_data$allele <- factor(long_data$allele, levels = c("Major", "Minor"))
+  long_data
 }
 
 #' @name cn_breaks

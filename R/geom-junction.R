@@ -25,6 +25,9 @@
 #' @param scale_by_span Make arcs spanning more of the axis taller, default: TRUE
 #' @param partner_label_size Size of the partner chromosome labels on stubs in mm, or 0
 #'   for none. Default: 2.5
+#' @param breakpoint_marks Mark each breakpoint with a short tick pointing to the side
+#'   it joins, from the `strand1` and `strand2` columns, as in PCAWG figures. Default:
+#'   FALSE
 #' @param ... Other arguments passed to [ggplot2::layer()], e.g. `colour`, `linewidth`,
 #'   or `alpha`.
 #' @param na.rm,show.legend,inherit.aes See [ggplot2::layer()].
@@ -55,7 +58,7 @@
 #'   theme_genomic()
 #' }
 geom_junction <- function(mapping = NULL, data = NULL, arc_height = NULL, arc_direction = c("up", "down"),
-                          scale_by_span = TRUE, partner_label_size = 2.5, ...,
+                          scale_by_span = TRUE, partner_label_size = 2.5, breakpoint_marks = FALSE, ...,
                           na.rm = FALSE, show.legend = NA, inherit.aes = TRUE) {
   arc_direction <- match.arg(arc_direction)
 
@@ -63,6 +66,10 @@ geom_junction <- function(mapping = NULL, data = NULL, arc_height = NULL, arc_di
   # stub label, overridden by user mapping
   junction_mapping <- ggplot2::aes(x = start1, xend = start2,
                                    label = ifelse(is.na(start2), as.character(seqnames2), as.character(seqnames1)))
+  if(breakpoint_marks) {
+    junction_mapping$strand <- ggplot2::aes(strand = strand1)$strand
+    junction_mapping$strandend <- ggplot2::aes(strandend = strand2)$strandend
+  }
   for(aes_name in names(mapping)) {
     junction_mapping[[aes_name]] <- mapping[[aes_name]]
   }
@@ -86,7 +93,8 @@ geom_junction <- function(mapping = NULL, data = NULL, arc_height = NULL, arc_di
                                    show.legend = show.legend, inherit.aes = inherit.aes,
                                    params = list(arc_height = arc_height, arc_direction = arc_direction,
                                                  scale_by_span = scale_by_span,
-                                                 partner_label_size = partner_label_size, na.rm = na.rm, ...))
+                                                 partner_label_size = partner_label_size,
+                                                 breakpoint_marks = breakpoint_marks, na.rm = na.rm, ...))
   if(anchored) {
     return(junction_layer)
   }
@@ -102,7 +110,7 @@ geom_junction <- function(mapping = NULL, data = NULL, arc_height = NULL, arc_di
 #' @export
 GeomJunction <- ggplot2::ggproto("GeomJunction", ggplot2::Geom,
   required_aes = c("x", "xend", "y", "yend"),
-  optional_aes = "label",
+  optional_aes = c("label", "strand", "strandend"),
   default_aes = ggplot2::aes(colour = "black", linewidth = 0.5, linetype = 1, alpha = NA),
   draw_key = ggplot2::draw_key_path,
 
@@ -112,7 +120,8 @@ GeomJunction <- ggplot2::ggproto("GeomJunction", ggplot2::Geom,
   },
 
   draw_panel = function(data, panel_params, coord, arc_height = 0.9, arc_direction = "up",
-                        scale_by_span = TRUE, partner_label_size = 2.5, na.rm = FALSE) {
+                        scale_by_span = TRUE, partner_label_size = 2.5, breakpoint_marks = FALSE,
+                        na.rm = FALSE) {
     data <- coord$transform(data, panel_params)
     direction <- if(arc_direction == "up") 1 else -1
     line_gp <- function(rows) {
@@ -164,6 +173,24 @@ GeomJunction <- ggplot2::ggproto("GeomJunction", ggplot2::Geom,
                                                                      fontsize = partner_label_size * ggplot2::.pt)))
       }
     }
+    # Ticks at each breakpoint in view, pointing left for + and right for - breakpoints
+    if(breakpoint_marks && all(c("strand", "strandend") %in% names(data))) {
+      ends <- rbind(data.frame(x = data$x, y = data$y, strand = data$strand, colour = data$colour,
+                               alpha = data$alpha, linewidth = data$linewidth),
+                    data.frame(x = data$xend, y = data$yend, strand = data$strandend, colour = data$colour,
+                               alpha = data$alpha, linewidth = data$linewidth))
+      ends <- ends[!is.na(ends$x) & ends$strand %in% c("+", "-"), , drop = FALSE]
+      if(nrow(ends) > 0) {
+        tick_side <- ifelse(ends$strand == "+", -1, 1)
+        junction_grobs <- grid::gList(junction_grobs,
+                                      grid::segmentsGrob(x0 = grid::unit(ends$x, "npc"),
+                                                         x1 = grid::unit(ends$x, "npc") + grid::unit(tick_side * 1.5, "mm"),
+                                                         y0 = ends$y, y1 = ends$y,
+                                                         gp = grid::gpar(col = ggplot2::alpha(ends$colour, ends$alpha),
+                                                                         lwd = ends$linewidth * 3 * ggplot2::.pt,
+                                                                         lineend = "butt")))
+      }
+    }
     grid::gTree(children = junction_grobs, name = "junctions")
   }
 )
@@ -191,34 +218,143 @@ GeomJunction <- ggplot2::ggproto("GeomJunction", ggplot2::Geom,
 #' @keywords data
 junction_copy_number <- function(junctions, segments, cn_column = "total_cn", cn_cap = NULL) {
   junctions <- as.data.frame(junctions)
-  segments <- as.data.frame(as_genomic_df(segments))
-  segment_key <- chrom_keys(segments$seqnames)
-
   for(anchor in c("1", "2")) {
     position <- junctions[[paste0("start", anchor)]]
     strand_column <- paste0("strand", anchor)
     if(strand_column %in% names(junctions)) {
       position <- ifelse(junctions[[strand_column]] == "-", position + 1, position)
     }
-    anchor_key <- chrom_keys(junctions[[paste0("seqnames", anchor)]])
-
-    anchor_cn <- rep(NA_real_, nrow(junctions))
-    for(chrom in intersect(unique(anchor_key), segment_key)) {
-      chrom_segments <- segments[segment_key == chrom, , drop = FALSE]
-      chrom_segments <- chrom_segments[order(chrom_segments$start), , drop = FALSE]
-      on_chrom <- which(anchor_key == chrom)
-      segment_index <- findInterval(position[on_chrom], chrom_segments$start)
-      found <- segment_index > 0
-      found[found] <- position[on_chrom][found] <= chrom_segments$end[segment_index[found]]
-      anchor_cn[on_chrom[found]] <- chrom_segments[[cn_column]][segment_index[found]]
-    }
-    if(!is.null(cn_cap)) {
-      anchor_cn <- pmin(anchor_cn, cn_cap)
-    }
-    junctions[[paste0("cn", anchor)]] <- anchor_cn
+    junctions[[paste0("cn", anchor)]] <- lookup_copy_number(junctions[[paste0("seqnames", anchor)]], position,
+                                                            segments, cn_column = cn_column, cn_cap = cn_cap)
   }
   junctions
 }
+
+#' @name lookup_copy_number
+#' @title Copy number of the segment containing each position
+#'
+#' @description
+#' For internal use only.
+#'
+#' @param seqnames,position Chromosomes and positions to look up
+#' @inheritParams junction_copy_number
+#' @returns Copy number per position, `NA` where no segment contains it
+#' @keywords internal
+lookup_copy_number <- function(seqnames, position, segments, cn_column = "total_cn", cn_cap = NULL) {
+  segments <- as.data.frame(as_genomic_df(segments))
+  segment_key <- chrom_keys(segments$seqnames)
+  position_key <- chrom_keys(seqnames)
+
+  position_cn <- rep(NA_real_, length(position))
+  for(chrom in intersect(unique(position_key), segment_key)) {
+    chrom_segments <- segments[segment_key == chrom, , drop = FALSE]
+    chrom_segments <- chrom_segments[order(chrom_segments$start), , drop = FALSE]
+    on_chrom <- which(position_key == chrom)
+    segment_index <- findInterval(position[on_chrom], chrom_segments$start)
+    found <- segment_index > 0
+    found[found] <- position[on_chrom][found] <= chrom_segments$end[segment_index[found]]
+    position_cn[on_chrom[found]] <- chrom_segments[[cn_column]][segment_index[found]]
+  }
+  if(!is.null(cn_cap)) {
+    position_cn <- pmin(position_cn, cn_cap)
+  }
+  position_cn
+}
+
+#' @name annotate_junctions
+#' @title Classify junctions by orientation and complex event
+#'
+#' @description
+#' Adds two columns for coloring [geom_junction()]:
+#' * `sv_class`: orientation from the breakpoint strands, `"DEL-like"` (+/-),
+#'   `"DUP-like"` (-/+), `"INV-h2h"` (+/+), or `"INV-t2t"` (-/-), for both cis and trans
+#'   junctions. Use with [scale_colour_sv_class()].
+#' * `event`: the JaBbA complex event the junction belongs to, from the event columns
+#'   (`chromothripsis`, `chromoplexy`, `templated_insertion`, `rigma`, `pyrgo`, `tyfonas`,
+#'   `ecdna`, `bfb`), or `"Simple"`; and `event_id` with the event label, e.g. `"CPX-4"`.
+#'   Use with [scale_colour_jabba_event()].
+#'
+#' @param junctions Data frame of junctions with `strand1` and `strand2` columns and
+#'   optionally JaBbA event columns, e.g. from `devgru::read_bedpe_file(output_type =
+#'   "dt")` of a JaBbA `junctions.bedpe`.
+#'
+#' @returns `junctions` as a data frame with `sv_class`, `event`, and `event_id` added
+#' @export
+#' @keywords data
+annotate_junctions <- function(junctions) {
+  junctions <- as.data.frame(junctions)
+  if(all(c("strand1", "strand2") %in% names(junctions))) {
+    orientation <- paste0(junctions$strand1, junctions$strand2)
+    junctions$sv_class <- factor(c("+-" = "DEL-like", "-+" = "DUP-like", "++" = "INV-h2h", "--" = "INV-t2t")[orientation],
+                                 levels = names(sv_class_colors$jabba))
+  }
+
+  # First event column with a label, in order of the JaBbA event columns
+  event_columns <- intersect(names(jabba_event_labels), names(junctions))
+  junctions$event <- "Simple"
+  junctions$event_id <- NA_character_
+  for(column in rev(event_columns)) {
+    labeled <- !is.na(junctions[[column]]) & as.character(junctions[[column]]) != ""
+    junctions$event[labeled] <- jabba_event_labels[[column]]
+    junctions$event_id[labeled] <- as.character(junctions[[column]][labeled])
+  }
+  junctions$event <- factor(junctions$event, levels = names(jabba_event_colors))
+  junctions
+}
+
+#' @name scale_colour_sv_class
+#' @title Junction orientation color scale
+#'
+#' @description
+#' Colors for junction orientation classes from [annotate_junctions()]. The `"jabba"`
+#' palette follows the JaBbA paper, with DEL-like junctions in cyan and DUP-like in
+#' magenta; the `"pcawg"` palette follows the PCAWG structural variant paper, with
+#' deletion-type in blue, duplication-type in red, and head-to-head and tail-to-tail
+#' inversions in green and purple.
+#'
+#' @param palette `"jabba"` (default) or `"pcawg"`
+#' @param name Legend title, default: "Junction"
+#' @param ... Other arguments passed to [ggplot2::scale_colour_manual()].
+#'
+#' @returns ggplot2 scale
+#' @export
+#' @keywords scale
+scale_colour_sv_class <- function(palette = c("jabba", "pcawg"), name = "Junction", ...) {
+  palette <- match.arg(palette)
+  ggplot2::scale_colour_manual(name = name, values = sv_class_colors[[palette]],
+                               breaks = names(sv_class_colors[[palette]]), ...)
+}
+
+#' @name scale_colour_jabba_event
+#' @title JaBbA complex event color scale
+#'
+#' @description
+#' Colors for the complex event classes from [annotate_junctions()], with junctions
+#' outside complex events in light gray so events stand out.
+#'
+#' @param name Legend title, default: "Event"
+#' @param ... Other arguments passed to [ggplot2::scale_colour_manual()].
+#'
+#' @returns ggplot2 scale
+#' @export
+#' @keywords scale
+scale_colour_jabba_event <- function(name = "Event", ...) {
+  ggplot2::scale_colour_manual(name = name, values = jabba_event_colors, ...)
+}
+
+# JaBbA event columns and their labels
+jabba_event_labels <- c(chromothripsis = "Chromothripsis", chromoplexy = "Chromoplexy",
+                        templated_insertion = "TIC", rigma = "Rigma", pyrgo = "Pyrgo",
+                        tyfonas = "Tyfonas", ecdna = "ecDNA", bfb = "BFB")
+
+jabba_event_colors <- c("Chromothripsis" = "#7B3294", "Chromoplexy" = "#E66101", "TIC" = "#1B9E77",
+                        "Rigma" = "#D01C8B", "Pyrgo" = "#B8860B", "Tyfonas" = "#E41A1C",
+                        "ecDNA" = "#A6611A", "BFB" = "#2166AC", "Simple" = "gray75")
+
+sv_class_colors <- list(
+  jabba = c("DEL-like" = "#00B0F0", "DUP-like" = "#E000E0", "INV-h2h" = "#2CA25F", "INV-t2t" = "#7B3294"),
+  pcawg = c("DEL-like" = "#2166AC", "DUP-like" = "#D7301F", "INV-h2h" = "#1A9850", "INV-t2t" = "#762A83")
+)
 
 #' @name scale_colour_sv_type
 #' @title Structural variant type color scale

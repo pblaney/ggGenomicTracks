@@ -12,6 +12,7 @@ geom_junction(
   arc_direction = c("up", "down"),
   scale_by_span = TRUE,
   partner_label_size = 2.5,
+  breakpoint_marks = FALSE,
   ...,
   na.rm = FALSE,
   show.legend = NA,
@@ -34,6 +35,10 @@ Default: 0.9 on their own, 0.25 when \code{y} is mapped.}
 
 \item{partner_label_size}{Size of the partner chromosome labels on stubs in mm, or 0
 for none. Default: 2.5}
+
+\item{breakpoint_marks}{Mark each breakpoint with a short tick pointing to the side
+it joins, from the \code{strand1} and \code{strand2} columns, as in PCAWG figures. Default:
+FALSE}
 
 \item{...}{Other arguments passed to \code{\link[ggplot2:layer]{ggplot2::layer()}}, e.g. \code{colour}, \code{linewidth},
 or \code{alpha}.}

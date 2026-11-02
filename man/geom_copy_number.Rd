@@ -11,6 +11,8 @@ geom_copy_number(
   data = NULL,
   cn_cap = NULL,
   bar_height = 1.5,
+  connectors = TRUE,
+  alleles = NULL,
   show_first_y_label = TRUE,
   ...,
   na.rm = FALSE,
@@ -28,6 +30,13 @@ geom_copy_number(
 at the cap with a triangle marker.}
 
 \item{bar_height}{Height of the bars in mm, default: 1.5}
+
+\item{connectors}{Join adjacent segments with thin gray lines, default: TRUE.
+Segments are assumed to come from one sample per layer.}
+
+\item{alleles}{Draw allele-specific copy number instead of total copy number, by
+giving the major and minor allele columns, e.g. \code{c("major_allele", "minor_allele")}, or \code{TRUE} for those JaBbA column names. Default: \code{NULL} for total
+copy number.}
 
 \item{show_first_y_label}{Label the lowest y-axis break, default: TRUE. See
 \code{\link[=label_drop_first]{label_drop_first()}}.}
@@ -51,7 +60,12 @@ columns, as in JaBbA copy number profiles; map \code{y} to another column such a
 free for \code{\link[=geom_junction]{geom_junction()}} in the same plot.
 
 Segments above \code{cn_cap} are drawn at the cap and marked with a triangle, so a few
-highly amplified segments do not flatten the rest of the profile.
+highly amplified segments do not flatten the rest of the profile. Adjacent segments
+are joined by thin gray reference connectors, as in JaBbA genome graphs.
+
+With \code{alleles}, the major and minor allele copy numbers are drawn as two
+semi-transparent series, red and blue, so where they are equal the bars overlap in
+purple.
 
 Also adds a y-axis scale with whole-number breaks starting at zero and a
 "Copy Number" y-axis title. Add your own \code{scale_y_continuous()} or \code{labs()} after it

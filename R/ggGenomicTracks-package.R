@@ -18,4 +18,5 @@ utils::globalVariables(c("seqnames", "start", "end", "width", "n",
                          "VAF",
                          "x", "y", "arm", "gieStain",
                          "forward", "label_hjust", "count", "score", "state", "total_cn",
-                         "seqnames1", "start1", "seqnames2", "start2", "reads.corrected"))
+                         "seqnames1", "start1", "seqnames2", "start2", "reads.corrected",
+                         "strand1", "strand2", "allele", "allele_cn"))
